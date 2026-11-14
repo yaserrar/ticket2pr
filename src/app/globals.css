@@ -1,0 +1,437 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * Ticket2PR design tokens. Direction: docs/UIs/Raycast UX Design Teardown.md
+ * "A premium Mac app": a near-black canvas built from white-alpha layers,
+ * hairline borders, calm two-tone text, keycaps, and one warm red brand light
+ * (#ff6363) used sparingly: focus, the logo, the running state, glows.
+ *
+ * Dark only, like Raycast. EVERY colour used by components comes from this
+ * file (no hex in components).
+ *
+ * Naming (per colour family X):
+ *   --X              solid fill / icon / dot
+ *   --X-foreground   text on a solid X fill
+ *   --X-subtle       tinted background (pills, callouts)
+ *   --X-muted        readable tinted text on the page background (AA)
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* shadcn surfaces */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+
+  /* Raycast white-alpha layers */
+  --color-fill-faint: var(--fill-faint);
+  --color-fill: var(--fill);
+  --color-fill-raised: var(--fill-raised);
+  --color-keycap: var(--keycap);
+
+  /* brand: Raycast red */
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-muted: var(--brand-muted);
+  --color-brand-border: var(--brand-border);
+
+  /* semantic (Raycast palette) */
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-muted: var(--success-muted);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-muted: var(--warning-muted);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-muted: var(--danger-muted);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-muted: var(--info-muted);
+
+  /* type: next/font variables are set on <html> in app/layout.tsx */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "SF Pro Text", sans-serif;
+  --font-heading: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  /* radius: 8 buttons · 12 cards/rows/inputs · 16–20 large panels · pills */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 24px;
+  --radius-4xl: 28px;
+
+  --shadow-2xs: var(--elevation-0);
+  --shadow-xs: var(--elevation-1);
+  --shadow-sm: var(--elevation-1);
+  --shadow-md: var(--elevation-2);
+  --shadow-lg: var(--elevation-3);
+  --shadow-xl: var(--elevation-4);
+
+  /* motion */
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-shimmer-text: shimmer-text 2.2s linear infinite;
+  --animate-pulse-dot: pulse-dot 1.8s ease-out infinite;
+  --animate-fade-up: fade-up 0.4s var(--ease-spring) both;
+  --animate-night-rider: night-rider 1.6s ease-in-out infinite;
+  --animate-skeleton: skeleton-sweep 1.6s ease-in-out infinite;
+
+  @keyframes shimmer-text {
+    0% { background-position: 150% 0; }
+    100% { background-position: -50% 0; }
+  }
+  @keyframes pulse-dot {
+    0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--brand) 55%, transparent); }
+    70% { box-shadow: 0 0 0 6px color-mix(in oklch, var(--brand) 0%, transparent); }
+    100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--brand) 0%, transparent); }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  /* Raycast "nightRider": a light sweeping across a loading bar. */
+  @keyframes night-rider {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(400%); }
+  }
+  @keyframes skeleton-sweep {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+}
+
+/* ─── Theme (dark only) ───────────────────────────────────────────────────── */
+:root {
+  color-scheme: dark;
+
+  --background: #07080a;
+  --foreground: #f5f5f6;
+  --surface: #0b0c0f;
+  --surface-raised: #111215;
+  --card: #0d0e11;
+  --card-foreground: #f5f5f6;
+  --popover: #131417;
+  --popover-foreground: #f5f5f6;
+  --primary: #e6e6e6;
+  --primary-foreground: #2f3031;
+  --secondary: #1a1b1e;
+  --secondary-foreground: #f5f5f6;
+  --muted: #17181b;
+  --muted-foreground: #9c9c9d;
+  --subtle-foreground: #7c7d80;
+  --accent: #1c1d21;
+  --accent-foreground: #ffffff;
+  --destructive: #ff6b6b;
+  --destructive-foreground: #ffffff;
+  --border: rgb(255 255 255 / 0.08);
+  --border-strong: rgb(255 255 255 / 0.14);
+  --input: rgb(255 255 255 / 0.1);
+  --ring: rgb(255 99 99 / 0.55);
+
+  --fill-faint: rgb(255 255 255 / 0.02);
+  --fill: rgb(255 255 255 / 0.05);
+  --fill-raised: rgb(255 255 255 / 0.1);
+  --keycap: #2a2b2e;
+
+  --brand: #ff6363;
+  --brand-hover: #ff7a7a;
+  --brand-foreground: #1a0606;
+  --brand-subtle: rgb(255 99 99 / 0.12);
+  --brand-muted: #ff8f8f;
+  --brand-border: rgb(255 99 99 / 0.35);
+
+  --success: #59d499;
+  --success-subtle: rgb(89 212 153 / 0.12);
+  --success-muted: #7fe0b2;
+  --warning: #ffc531;
+  --warning-subtle: rgb(255 197 49 / 0.12);
+  --warning-muted: #ffd56b;
+  --danger: #ff5f5f;
+  --danger-foreground: #1a0606;
+  --danger-subtle: rgb(255 95 95 / 0.12);
+  --danger-muted: #ff9494;
+  --info: #56c2ff;
+  --info-subtle: rgb(86 194 255 / 0.12);
+  --info-muted: #8dd6ff;
+
+  --elevation-0: 0 1px 0 0 rgb(0 0 0 / 0.3);
+  --elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --elevation-2: 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 8px 20px -6px rgb(0 0 0 / 0.6);
+  --elevation-3: 0 2px 4px 0 rgb(0 0 0 / 0.35), 0 18px 44px -10px rgb(0 0 0 / 0.7);
+  --elevation-4: 0 4px 8px 0 rgb(0 0 0 / 0.4), 0 30px 70px -14px rgb(0 0 0 / 0.8);
+
+  --grid-line: rgb(255 255 255 / 0.04);
+  --radius: 0.75rem;
+}
+
+/* ─── Base ────────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv11", "ss01", "ss03";
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  h1, h2, h3, h4 {
+    @apply font-heading font-semibold;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--brand) 35%, transparent);
+  }
+  code, kbd, samp, pre {
+    @apply font-mono;
+  }
+  :focus-visible {
+    outline-offset: 2px;
+  }
+}
+
+/* ─── Utilities (signature pieces) ───────────────────────────────────────── */
+
+/* Small uppercase mono label ("FIG 01", "NEW", "TRELLO"). */
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The light "Download" key: dark ring + soft white glow + inner highlights. */
+@utility shadow-key {
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.55),
+    0 0 14px 0 rgb(255 255 255 / 0.1),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.65),
+    inset 0 -1px 0 0 rgb(0 0 0 / 0.18);
+}
+
+/* A glassy keycap. */
+@utility shadow-keycap {
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.08),
+    inset 0 -1px 0 0 rgb(0 0 0 / 0.5),
+    0 1px 1px 0 rgb(0 0 0 / 0.4);
+}
+
+/* Floating glass bar / window. */
+@utility glass {
+  background: color-mix(in oklch, var(--background) 72%, transparent);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+
+/* A Raycast window: deep surface, hairline outline, inner top highlight, deep shadow. */
+@utility window {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+    var(--elevation-4);
+}
+
+/* Soft red bloom (the glow under the ⌘ key). */
+@utility glow-brand {
+  box-shadow: 0 0 0 1px var(--brand-border), 0 0 24px -4px color-mix(in oklch, var(--brand) 55%, transparent);
+}
+
+/* Shimmer text: live status lines. */
+@utility text-shimmer {
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    var(--muted-foreground) 0%,
+    var(--muted-foreground) 35%,
+    var(--foreground) 50%,
+    var(--muted-foreground) 65%,
+    var(--muted-foreground) 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: var(--animate-shimmer-text);
+}
+
+/* Blueprint grid lines. */
+@utility bg-grid-lines {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Fine film grain (on the red light beams). */
+@utility bg-noise {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0.14 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Diagonal red light beams (hero artwork). */
+@utility bg-beams {
+  background-image: repeating-linear-gradient(
+    115deg,
+    transparent 0 64px,
+    color-mix(in oklch, var(--brand) 65%, transparent) 64px 86px,
+    color-mix(in oklch, var(--brand) 20%, transparent) 86px 104px,
+    transparent 104px 168px
+  );
+}
+
+/* Fade masks. */
+@utility mask-fade-b {
+  mask-image: linear-gradient(to bottom, black 60%, transparent);
+}
+@utility mask-fade-x {
+  mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+}
+@utility mask-radial {
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+
+/* Running-state dot (red, animated ring). */
+@utility dot-running {
+  background: var(--brand);
+  animation: var(--animate-pulse-dot);
+}
+
+/* Shimmering skeleton (content placeholders: never spinners in content). */
+@utility skeleton-shimmer {
+  background: linear-gradient(90deg, var(--fill) 25%, var(--fill-raised) 50%, var(--fill) 75%);
+  background-size: 400% 100%;
+  animation: var(--animate-skeleton);
+}
+
+/* Thin, quiet scrollbars. */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+/* ─── Reduced motion ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─── Card descriptions (Trello markdown) ────────────────────────────────── */
+@layer components {
+  .prose-card {
+    @apply text-[13.5px] leading-6 text-foreground/90 [overflow-wrap:anywhere];
+  }
+  .prose-card > :first-child {
+    @apply mt-0;
+  }
+  .prose-card h1,
+  .prose-card h2,
+  .prose-card h3,
+  .prose-card h4 {
+    @apply mt-5 mb-2 text-sm font-semibold text-foreground;
+  }
+  .prose-card p {
+    @apply my-2.5;
+  }
+  .prose-card ul,
+  .prose-card ol {
+    @apply my-2.5 space-y-1 pl-5;
+  }
+  .prose-card ul {
+    @apply list-disc marker:text-subtle-foreground;
+  }
+  .prose-card ol {
+    @apply list-decimal marker:font-mono marker:text-xs marker:text-subtle-foreground;
+  }
+  .prose-card a {
+    @apply text-brand-muted underline decoration-brand-border underline-offset-4 transition-colors hover:decoration-brand-muted;
+  }
+  .prose-card strong {
+    @apply font-semibold text-foreground;
+  }
+  .prose-card blockquote {
+    @apply my-3 border-l-2 border-border-strong pl-3 text-muted-foreground;
+  }
+  .prose-card code {
+    @apply rounded-sm bg-fill-raised px-1 py-0.5 text-[0.85em];
+  }
+  .prose-card pre {
+    @apply my-3 overflow-x-auto rounded-lg border bg-fill-faint p-3 text-xs leading-5;
+  }
+  .prose-card pre code {
+    @apply bg-transparent p-0;
+  }
+  .prose-card hr {
+    @apply my-5;
+  }
+  .prose-card table {
+    @apply my-3 w-full border-collapse text-xs;
+  }
+  .prose-card th,
+  .prose-card td {
+    @apply border px-2 py-1.5 text-left;
+  }
+  .prose-card img {
+    @apply my-3 max-w-full rounded-lg border;
+  }
+}
+
+/* ─── Toasts (Sonner) ────────────────────────────────────────────────────── */
+@layer components {
+  .cn-toast {
+    font-family: var(--font-sans);
+    box-shadow: var(--elevation-3) !important;
+  }
+  .cn-toast[data-type="success"] [data-icon] { color: var(--success); }
+  .cn-toast[data-type="error"] [data-icon] { color: var(--danger); }
+  .cn-toast[data-type="warning"] [data-icon] { color: var(--warning); }
+  .cn-toast[data-type="info"] [data-icon] { color: var(--info); }
+  .cn-toast [data-description] { color: var(--muted-foreground) !important; }
+}
