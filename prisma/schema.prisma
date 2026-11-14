@@ -1,0 +1,159 @@
+// Ticket2PR — Prisma schema (SQLite, local file in ./data)
+// Conventions (spec §5.1): enums are stored as String and JSON as String; both
+// are validated and parsed with Zod in the service layer.
+// Sections:  1. Settings   2. Projects & cards   3. Runs   4. Sync history
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── 1. Settings (singleton row, id = 1) ────────────────────────────────────
+
+model Settings {
+  id                Int       @id @default(1)
+  trelloApiKey      String?
+  trelloToken       String?
+  trelloUsername    String? // from the last successful connection test
+  githubToken       String? // optional: opens pull requests through the GitHub API
+  pollIntervalSec   Int       @default(120)
+  maxParallelRuns   Int       @default(1)
+  claudeModel       String? // null = Claude Code's default model
+  maxTurns          Int       @default(60)
+  claudePausedUntil DateTime? // usage limit reached: queued runs wait until then
+  claudeUsageJson   String? // last usage report from a run: { status, utilization, resetsAt, type, at }
+  updatedAt         DateTime  @updatedAt
+
+  @@map("settings")
+}
+
+// ─── 2. Projects & cards ────────────────────────────────────────────────────
+
+model Project {
+  id                     String    @id @default(cuid())
+  name                   String
+  trelloBoardId          String
+  trelloBoardName        String
+  trelloBoardUrl         String?
+  trelloSourceListId     String // where clients add cards
+  trelloSourceListName   String
+  repoPath               String? // absolute path to the local git repository
+  baseBranch             String    @default("main")
+  setupCommand           String? // e.g. "npm ci", run in every new worktree
+  extraInstructions      String? // appended to every prompt
+  workMode               String    @default("BRANCH_PER_CARD") // BRANCH_PER_CARD | SHARED_BRANCH
+  sharedBranch           String? // SHARED_BRANCH: the branch every card works on
+  sharedInRepo           Boolean   @default(true) // SHARED_BRANCH: work in the repo folder itself
+  trelloInProgressListId String? // write-back: Trello list for each status (null = don't move)
+  trelloReviewListId     String?
+  trelloDoneListId       String?
+  trelloNeedsInfoListId  String? // questions asked on Trello, waiting for the client
+  lastSyncedAt           DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  cards                  Card[]
+  syncLogs               SyncLog[]
+
+  @@map("projects")
+}
+
+model Card {
+  id                   String    @id @default(cuid())
+  projectId            String
+  project              Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  trelloCardId         String
+  trelloShortLink      String
+  trelloUrl            String
+  trelloListId         String // list the card currently sits in on Trello
+  title                String
+  description          String    @default("")
+  labelsJson           String    @default("[]") // [{ id, name, color }]
+  checklistsJson       String    @default("[]") // [{ id, name, items: [{ id, name, state }] }]
+  trelloLastActivity   DateTime
+  status               String    @default("NEW") // NEW | IN_PROGRESS | REVIEW | DONE
+  position             Float     @default(0) // order inside a column
+  changedOnTrello      Boolean   @default(false) // content changed after work started
+  removedFromTrello    Boolean   @default(false) // archived or deleted on Trello
+  branchName           String?
+  worktreePath         String?
+  lastSessionId        String? // agent session, for follow-up runs
+  prUrl                String?
+  startSha             String? // commit the card's work started from (SHARED_BRANCH diffs)
+  trelloError          String? // last Trello write-back failure (never blocks the workflow)
+  postedCommentIds     String    @default("[]") // Trello comments Ticket2PR posted (not the client's)
+  sentContentJson      String? // card content as last sent to Claude: { title, description, labels, checklists }
+  sentContextAt        DateTime? // when comments and attachments were last sent to Claude
+  clientQuestions      String? // from the last run: questions for the client
+  clientUpdate         String? // from the last run: plain-language update for the client
+  clientUpdatePostedAt DateTime?
+  waitingSince         DateTime? // questions asked on Trello, waiting for an answer
+  clientRepliedAt      DateTime? // the client commented while we were waiting
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  runs                 Run[]
+
+  @@unique([projectId, trelloCardId])
+  @@index([projectId, status])
+  @@map("cards")
+}
+
+// ─── 3. Runs ────────────────────────────────────────────────────────────────
+
+model Run {
+  id         String     @id @default(cuid())
+  cardId     String
+  card       Card       @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  kind       String     @default("INITIAL") // INITIAL | FOLLOW_UP
+  runner     String     @default("fake") // fake | claude
+  prompt     String
+  status     String     @default("QUEUED") // QUEUED | RUNNING | SUCCEEDED | FAILED | CANCELLED | INTERRUPTED
+  sessionId  String?
+  summary    String? // the agent's final message
+  error      String?
+  costUsd    Float?
+  numTurns   Int?
+  durationMs Int?
+  startedAt  DateTime?
+  endedAt    DateTime?
+  createdAt  DateTime   @default(now())
+  events     RunEvent[]
+
+  @@index([status, createdAt])
+  @@index([cardId, createdAt])
+  @@map("runs")
+}
+
+model RunEvent {
+  id        String   @id @default(cuid())
+  runId     String
+  run       Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  seq       Int // 0, 1, 2… for replay
+  type      String // system | info | assistant_text | tool_use | tool_result | result | error
+  payload   String // JSON
+  createdAt DateTime @default(now())
+
+  @@unique([runId, seq])
+  @@map("run_events")
+}
+
+// ─── 4. Sync history ────────────────────────────────────────────────────────
+
+model SyncLog {
+  id        String    @id @default(cuid())
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  trigger   String // AUTO | MANUAL
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  added     Int       @default(0)
+  updated   Int       @default(0)
+  removed   Int       @default(0)
+  error     String?
+
+  @@index([projectId, startedAt])
+  @@map("sync_logs")
+}
