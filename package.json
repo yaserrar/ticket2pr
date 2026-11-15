@@ -2,10 +2,17 @@
   "name": "ticket2pr",
   "version": "0.1.0",
   "private": true,
+  "description": "Turn Trello cards into reviewed changes with Claude Code, on your own machine.",
+  "license": "MIT",
+  "author": "Youssef Aserrar",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
-    "dev": "next dev -H 127.0.0.1 -p 3000",
+    "setup": "node scripts/setup.mjs",
+    "dev": "next dev -H 127.0.0.1",
     "build": "next build",
-    "start": "next start -H 127.0.0.1 -p 3000",
+    "start": "next start -H 127.0.0.1",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
