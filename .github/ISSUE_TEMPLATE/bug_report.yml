@@ -1,0 +1,42 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error messages or logs
+      description: From the app (run log, toast) or the terminal running `npm run dev`. Remove any tokens first.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Ticket2PR version
+      description: The commit you're on (`git rev-parse --short HEAD`).
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: macOS 15, Node 22.12, Claude Code 2.1.x, Chrome
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Work mode
+      options:
+        - A branch per card
+        - One shared branch
+        - Not related
