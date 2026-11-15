@@ -1,7 +1,7 @@
 /**
  * Trello label colour names → display colours. Label colours are user data
- * from Trello, applied through a CSS variable (see <LabelChip/>), like
- * Dispatch's workspace labels.
+ * from Trello, applied through a CSS variable (see <LabelChip/>), the one
+ * place outside the design tokens where colours come from data.
  */
 const BASE: Record<string, string> = {
   green: '#4bce97',

@@ -3,7 +3,7 @@
 @import "shadcn/tailwind.css";
 
 /*
- * Ticket2PR design tokens. Direction: docs/UIs/Raycast UX Design Teardown.md
+ * Ticket2PR design tokens. Direction: Raycast-style, dark only.
  * "A premium Mac app": a near-black canvas built from white-alpha layers,
  * hairline borders, calm two-tone text, keycaps, and one warm red brand light
  * (#ff6363) used sparingly: focus, the logo, the running state, glows.

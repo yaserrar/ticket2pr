@@ -8,7 +8,7 @@ describe('parseRemoteUrl', () => {
     expect(parseRemoteUrl('ssh://git@github.com/yaserrar/bistro-site.git')).toEqual(expected);
     expect(parseRemoteUrl('https://github.com/yaserrar/bistro-site.git')).toEqual(expected);
     expect(parseRemoteUrl('https://github.com/yaserrar/bistro-site')).toEqual(expected);
-    expect(parseRemoteUrl('git@github-asrar:yaserrar/bistro-site.git')).toMatchObject({ host: 'github-asrar' });
+    expect(parseRemoteUrl('git@github-work:acme/bistro-site.git')).toMatchObject({ host: 'github-work' });
   });
 
   it('returns null for local paths and junk', () => {
@@ -18,7 +18,7 @@ describe('parseRemoteUrl', () => {
 
   it('recognises github.com and SSH aliases for it', () => {
     expect(githubRepoFromRemote('git@github.com:a/b.git')).toEqual({ owner: 'a', repo: 'b' });
-    expect(githubRepoFromRemote('git@github-asrar:yaserrar/asrar.git')).toEqual({ owner: 'yaserrar', repo: 'asrar' });
+    expect(githubRepoFromRemote('git@github-work:acme/website.git')).toEqual({ owner: 'acme', repo: 'website' });
     expect(githubRepoFromRemote('git@gitlab.com:a/b.git')).toBeNull();
     expect(githubRepoFromRemote('git@mygithubby.example:a/b.git')).toBeNull();
   });

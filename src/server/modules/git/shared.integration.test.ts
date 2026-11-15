@@ -95,7 +95,7 @@ describe('shared branch, in the repository folder', () => {
   });
 
   it('shows only this card’s changes, and keeps going on retries even with edits', async () => {
-    writeFileSync(path.join(repo, 'footer.html'), '<footer>Made with care · by asrar</footer>\n');
+    writeFileSync(path.join(repo, 'footer.html'), '<footer>Made with care · by Bistro</footer>\n');
     const changes = await m.changes.getChanges(repo, 'main', startSha);
     expect(changes.files.map((f) => f.path)).toEqual(['footer.html']);
     expect(changes.baseRef).toMatch(/where this card started/);
