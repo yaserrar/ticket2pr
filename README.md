@@ -1,164 +1,210 @@
 # Ticket2PR
 
-A local web app that turns Trello cards into reviewed pull requests, using Claude Code on your own machine
-(spec: `../docs/specs/ticket2pr-spec.md`).
+**Turn Trello cards into reviewed code changes with Claude Code, on your own machine.**
 
-**Status: milestones M1–M6.** Trello sync, the drag and drop workflow with a run queue, git (a worktree and branch
-per card, diff, commit, push, pull request, discard) and **Claude Code** runs with your own Claude subscription.
-Trello write-back and polish (M7) are next.
+Your clients write requests as Trello cards. Ticket2PR pulls them onto a local Kanban board. Drag a card to
+*In progress* and Claude Code works on it in your repository, in its own branch. You review the diff, then commit,
+push and open the pull request yourself. Claude never commits or pushes.
 
-## Run it
+- **Local-first.** A Next.js app on `127.0.0.1`, a SQLite file, your repositories, your git credentials. No cloud
+  backend, no accounts, no telemetry.
+- **Your Claude subscription.** Runs use the Claude Code login on your machine (Claude Pro or Max), not an API key.
+- **Human in the loop.** Every change goes through your review before it leaves your machine.
 
-```bash
-npm install            # also patches iconsax and generates the Prisma client
-npx prisma migrate deploy
-npm run dev            # http://127.0.0.1:3000 (localhost only, on purpose)
+> **Status: early.** Built and used by one developer on macOS. Linux should work; Windows is untested. Expect rough
+> edges, and please [open an issue](../../issues) when you hit one.
+
+## How it works
+
+```
+Trello card ──sync──► New ──drag──► In progress ──Claude finishes──► Review ──push / PR──► Done
+                       ▲                │  ▲                             │
+                       └──── discard ───┘  └──── request changes ────────┘
 ```
 
-On first launch, the onboarding asks for a Trello **API key** (create a Power-Up at
-https://trello.com/power-ups/admin) and a **token** (the form links to the authorisation page once the key is
-pasted). Credentials are stored in `data/app.db` on this machine and are never sent back to the browser in full.
+1. **Sync.** New cards from the Trello list you choose appear in *New* (polling plus a Refresh button).
+2. **Run.** Dragging a card to *In progress* creates a branch and a git worktree for it, then starts Claude Code
+   there. The card's title, description, checklist, comments and attachments (screenshots too) are its instructions.
+   You watch the run live.
+3. **Review.** When Claude is done, the card moves to *Review*: read the diff, request changes (Claude continues the
+   same session), or commit and push. Open the pull request from the app.
+4. **Tell the client.** Post Claude's plain-language update on the Trello card, or its questions when the request
+   was unclear. Optionally, cards move between your Trello lists as their status changes.
 
-## Claude Code (spec §7)
+## Requirements
 
-Runs use the Claude Agent SDK, which starts Claude Code on this machine with **your Claude Pro/Max login** (run
-`claude`, then `/login`, once). `ANTHROPIC_API_KEY` is removed from the environment Claude Code starts with, so it
-never falls back to an API key. Settings › Claude Code shows the account and plan (checked without sending a prompt),
-the model and the turn limit.
+- **Node.js 20.19 or newer** and **git**.
+- **A Claude Pro or Max subscription**, with Claude Code signed in on this machine. Install
+  [Claude Code](https://code.claude.com/docs/en/overview), run `claude`, then type `/login` once.
+- **A Trello account.** The setup screen walks you through creating an API key and a token.
+- **Your project's git repository** on this machine, with push access configured as usual (SSH key or credential
+  helper). A GitHub token is optional: without one, "Open pull request" opens GitHub's compare page.
 
-What Claude may do in a card's worktree (`src/server/modules/runs/runners/tool-policy.ts`):
-- edit files inside the worktree (`acceptEdits` mode), read-only git, and the project's own `test` / `lint` /
-  `typecheck` / `build` scripts with the package manager its lockfile implies;
-- never: `git commit` / `push` / `config` / `remote` / branch changes, `curl` / `wget` / `ssh`, web tools, questions.
-  Deny rules win over the repository's own settings;
-- anything else is refused with an explanation, logged as "Refused …", and Claude carries on.
+## Quick start
 
-The repository's `CLAUDE.md` and the project's "Instructions for Claude" are part of every run. Follow-up runs
-("Request changes") resume the same Claude session. The cost shown is what the run would cost on the API; with a
-subscription it is covered by your plan. `RUNNER="fake"` simulates runs without using the plan.
+```bash
+git clone <this repository> ticket2pr
+cd ticket2pr
+npm install        # also generates the database client
+npm run setup      # creates .env and the local database (data/app.db)
+npm run dev        # http://127.0.0.1:3000
+```
 
-## Scripts
+Open http://127.0.0.1:3000 and follow the three setup steps: **Claude** (checks your login without using your
+plan), **Trello** (API key and token), **First project** (Trello board and list, local repository path).
+
+- Another port: `PORT=3001 npm run dev`.
+- A faster, production build: `npm run build`, then `npm start`.
+- Updating: `git pull`, `npm install`, `npm run setup` (applies new database migrations; your data is kept).
+
+The app always listens on `127.0.0.1` only. Don't expose it to a network: it can run code on your machine through
+Claude.
+
+## Features
+
+### Board and runs
+- Kanban board with drag and drop: *New → In progress → Review → Done*, with explanations when a move isn't allowed.
+- Live run log (Claude's messages, tool calls and results), Stop, Retry, and **Request changes** to continue the same
+  Claude session with your instructions.
+- A run queue (*Runs at the same time* in Settings). Runs interrupted by a server stop are marked as such.
+- Per project: a setup command for new worktrees (for example `npm ci`) and extra instructions for Claude. The
+  repository's own `CLAUDE.md` is read too.
+
+### Two ways to work (Project settings)
+- **A branch per card** (default). Each card gets a `t2p/…` branch in its own worktree under `~/.ticket2pr/worktrees`,
+  started from the latest `origin/{base}`. Your working copy is never touched, and cards can run side by side.
+  **Update from main** merges new base commits into a card branch (aborted cleanly on conflicts), and **Clean up**
+  removes Done cards' worktrees and their local branches once pushed.
+- **One shared branch.** Every card works on one branch (for example `dev`), one card at a time, either directly in
+  your repository folder or in one separate folder. Each card starts from a clean folder and pulls the latest commits
+  first. Push moves the card to Done. No pull request per card.
+- **Repository chip** on the board: which branch your folder is on, how far behind origin, and a safe **Pull**
+  (fast-forward only).
+
+### Working with the client
+- **Context for Claude:** Trello comments and attachments go into every run. Screenshots, PDFs and text files are
+  downloaded outside the repository (never in the diff) and Claude may read them. Follow-ups get only what's new.
+- **Updated on Trello:** if the client edits the card or comments while work is going on, the card says so, and its
+  **Client** tab shows exactly what changed: send it to Claude, or mark it as seen.
+- **Client update:** Claude ends each run with a few plain sentences for the client. Edit them, then post them on the
+  Trello card. Commit messages and PR descriptions keep only the technical summary.
+- **Questions:** when a request is unclear, Claude changes nothing and writes questions instead. **Ask on Trello**
+  posts them; when the client answers, **Continue with the answer** resumes the work.
+- **Move cards on Trello** (optional): choose a list for In progress, Review, Needs info and Done. Failures never
+  block anything; the card shows a badge.
+
+### Claude usage and notifications
+- Runs report your subscription's usage (Settings › Claude Code). At the limit, the queue pauses and the card
+  continues on its own after the reset, resuming the same session. **Resume now** lifts the pause.
+- Optional desktop notifications while the app is open in a tab: a run is ready or failed, Claude has questions, the
+  client replied, the usage limit paused the queue.
+
+## What Claude may do
+
+Runs are unattended, so permissions are strict (`src/server/modules/runs/runners/tool-policy.ts`):
+
+- **Allowed:** reading the repository and editing files inside the card's worktree, read-only git, and the project's
+  own `test`, `lint`, `typecheck` and `build` scripts (with the package manager its lockfile implies). Reading the
+  card's downloaded attachments.
+- **Always denied:** `git commit`, `push`, `config`, `remote` and branch changes, `curl`, `wget`, `ssh`, `sudo`,
+  `npm publish`, web search and fetch. Deny rules win over the repository's own Claude settings.
+- **Anything else** is refused with an explanation (shown as "Refused …" in the log), and Claude carries on without it.
+- Card text, comments and attachments come from your client: the prompt marks them as a request, never as
+  instructions that change these rules.
+
+These rules reduce risk; they are not a sandbox. Only use Ticket2PR on repositories and Trello boards you trust.
+
+## Your data
+
+Everything stays on your machine:
+- `data/app.db` (SQLite): projects, cards, run logs, settings, and your **Trello key and token** and optional
+  **GitHub token**, stored as plain text. Keep this folder private; it is ignored by git.
+- `~/.ticket2pr/worktrees` and `~/.ticket2pr/attachments`: card worktrees and downloaded Trello attachments.
+- The API refuses requests whose `Host` or `Origin` isn't `127.0.0.1` or `localhost`, which blocks other websites
+  and DNS-rebinding attacks from reaching it through your browser.
+
+## Configuration
+
+Set in `.env` (see `.env.example`). All optional except `DATABASE_URL`.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DATABASE_URL` | `file:./data/app.db` | SQLite file |
+| `PORT` | `3000` | Port for `npm run dev` / `npm start` |
+| `RUNNER` | `claude` | `fake` simulates runs without using your plan (UI work, demos) |
+| `CLAUDE_CODE_PATH` | bundled | Use another `claude` binary than the one bundled with the Agent SDK |
+| `WORKTREES_DIR` | `~/.ticket2pr/worktrees` | Where worktrees go (attachments go next to it) |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
+| `TRELLO_API_BASE`, `GITHUB_API_BASE` | official APIs | Point the clients at a local mock |
+
+## Troubleshooting
+
+- **"Claude Code is not signed in"**: run `claude` in a terminal, type `/login`, sign in with the account that has
+  your Pro or Max plan, then **Check again** in Settings.
+- **"Your Claude usage limit is reached"**: queued runs continue after the reset shown on the board.
+- **Trello rejected the key or token**: create a new token from the link in Settings › Trello.
+- **Push fails**: Ticket2PR pushes with your normal git setup. Check that `git push` works in a terminal in that
+  repository (SSH key, credential helper). Git errors are shown as git wrote them.
+- **Port already in use**: `PORT=3001 npm run dev`.
+- **`npm install` fails building `better-sqlite3`**: check `node -v` (20.19 or newer is required).
+
+## Development
+
+```bash
+npm run dev          # with RUNNER="fake" in .env to work on the UI without using your plan
+npm run typecheck
+npm run lint
+npm test             # Vitest: unit tests and git integration tests on temporary repositories
+```
 
 | Script | What it does |
 |---|---|
-| `npm run dev` / `start` | Next.js on 127.0.0.1:3000 |
-| `npm run typecheck` · `lint` · `test` | TypeScript, ESLint, Vitest |
-| `npm run db:migrate` | New migration (`prisma migrate dev`), then `npm run db:generate` |
+| `npm run setup` | Create `.env` (if missing) and apply database migrations |
+| `npm run db:migrate` | Create a migration after editing `prisma/schema.prisma` |
 | `npm run db:studio` | Browse the SQLite database |
 
-## How sync works (spec §6.3)
-
-- `POST /api/projects/{id}/sync` pulls the open cards of the board in **one request**, plus the board's checklists
-  in one more request only when a card is new or changed. Polling every few minutes stays far below Trello's rate
-  limits.
-- New cards from the **source list** are created in *New*. Cards elsewhere on the board are ignored.
-- Trello owns the **content** (title, description, labels, checklists). Ticket2PR owns the **status** (the column).
-- Content edited after work started sets `changedOnTrello`. Cards archived or deleted on Trello are flagged
-  `removedFromTrello`, never deleted locally.
-- One sync per project at a time; a concurrent request gets the running sync's result. Every sync writes a
-  `SyncLog` row (kept 7 days).
-
-## Workflow (spec §9)
+### Code map
 
 ```
-NEW ──drag──► IN_PROGRESS ──run succeeds──► REVIEW ──PR opened / drag──► DONE
- ▲                 │  ▲                        │
- │  discard        │  └──── request changes ───┘
- └─────────────────┘
+src/server/modules/<feature>/*.service.ts      business logic and database access
+src/server/modules/trello/                     typed Trello client, write-back, comments and attachments
+src/server/modules/sync/sync.plan.ts           pure sync diff (unit-tested)
+src/server/modules/workflow/workflow.service.ts  every status change of a card
+src/server/modules/runs/                       queue, executor, live stream, prompt, runners (claude, fake)
+src/server/modules/git/                        repository checks, worktrees, shared branch, diff, commit and push
+src/server/presenters/*.presenter.ts           database row → API shape (src/types/*)
+src/app/api/**/route.ts                        thin handlers through route() (Zod, loopback guard, errors)
+src/schemas/*.ts                               Zod schemas shared by forms and routes
+src/services/api/*.ts → src/hooks/*.ts         fetch client → React Query hooks
+src/components/{board,cards,projects,settings}  feature components
 ```
 
-- Rules live in one shared function (`src/lib/workflow.ts`): the board explains refused moves before calling the
-  API, and `workflow.service.ts` enforces the same rules. Destructive moves need confirmation.
-- **New → In progress** queues a run. The run creates the branch `t2p/{shortLink}-{title}` in a worktree under
-  `~/.ticket2pr/worktrees/{project}/{shortLink}` (from `origin/{base}`), runs the setup command once, then the agent.
-  Your main working copy is never touched.
-- At most *Runs at the same time* (Settings) run at once; the rest show "Queued (2nd)". Runs left running when the
-  server stops are marked *Interrupted* on the next start.
-- The card panel has **Run** (live log over SSE, Stop, Retry, Request changes), **Changes** (diff vs the base branch,
-  reset) and **Git** (commit, push with your own credentials, pull request, discard).
-- Pull requests: with a GitHub token (Settings) they open through the API and the card moves to Done; without one,
-  GitHub's compare page opens. GitHub SSH aliases such as `git@github-work:owner/repo.git` are recognised.
+`docs/spec.md` is the original design; code comments cite its sections as `spec §x.y`. `AGENTS.md` lists the
+project's conventions (also used by coding agents).
 
-## Work modes (Project settings › How cards are worked on)
+### Testing without Trello or Claude
 
-**A branch per card** (default): everything above. Extras:
-- **Update from {base}** (Git tab) merges the latest `origin/{base}` into the card branch when it is behind. On a
-  conflict the merge is aborted, nothing changes, and the conflicting files are listed.
-- **Clean up** (Git tab of a Done card, or *Clean up Done cards* in the repository chip) removes worktrees and deletes
-  local branches only when origin has every commit of them.
-
-**One shared branch**: every card works on one branch (empty = the base branch), one card at a time.
-- *Work directly in my repository folder* (default): Claude works in your repo folder, which must already be on that
-  branch. Ticket2PR never switches it. Off: one separate worktree for the branch is shared by the project's cards.
-- A card's first run needs a clean folder, fast-forwards the branch from origin, and records the start commit
-  (`cards.startSha`). Changes and commit counts are relative to it. Retries and follow-ups keep going from there.
-- Another card can start only when the open one is pushed (Push moves it to Done), moved to Done, or discarded.
-- Discard throws away uncommitted changes only; commits, the branch and the folder stay. No pull request per card. On
-  a branch other than the base, the Git tab links GitHub's compare page for a release PR.
-- The mode can't change while cards are In progress or in Review.
-
-**Repository chip** (board toolbar): the repo folder's branch and how far behind origin it is (fetched at most once a
-minute). **Pull** only fast-forwards; it refuses on diverged branches, and while a shared-branch card works in the folder.
-
-## Working with the client (Trello)
-
-- **Context for Claude:** every run gets the card's Trello comments and attachments. Uploaded screenshots, PDFs and text
-  files are downloaded to `~/.ticket2pr/attachments/{card}` (outside the repo, so never in the diff) and Claude may read
-  that folder. Follow-up runs get only what's new since the last run: card edits, comments, attachments. Comments
-  Ticket2PR posted itself are left out.
-- **Updated on Trello:** a sync that finds an edit or a new comment on a card being worked on sets the badge. The card's
-  **Client** tab shows what changed: **Send to Claude** or **Mark as seen**.
-- **Client update:** Claude ends each run with a `## Client update` (plain words). Edit it in the Client tab and **Post on
-  Trello**. Commit messages and PR descriptions keep only the technical summary.
-- **Needs info:** when a request is unclear Claude makes no changes and writes `## Questions for the client`. **Ask on
-  Trello** posts them and marks the card *Waiting for client*. A comment from the client then shows *Client replied*
-  and **Continue with the answer** resumes the session with it.
-- **Move cards on Trello** (Project settings, optional): the list for In progress, Review, Needs info and Done.
-  Discarded cards go back to the source list. Failures never block anything; they show a *Trello update failed* badge.
-
-## Claude usage limit
-
-Runs report the subscription's usage (Settings › Claude Code). When the limit is reached the queue pauses until the
-reset (board banner, **Resume now**), the interrupted run is recorded, and the card continues automatically after the
-reset, resuming the same Claude session.
-
-## Notifications
-
-While the app is open in a tab, Settings › Notifications turns on desktop notifications (the browser asks once): a run
-is ready or failed, Claude has questions, the client replied, the usage limit paused the queue. In the app they're
-toasts.
-
-## Code map
-
-Same layers and naming as the other Asrar apps (`../docs/NEXTJS_ARCHITECTURE.md`):
-
-```
-src/server/modules/<feature>/<feature>.service.ts   business logic + Prisma
-src/server/modules/trello/trello.client.ts          typed Trello REST wrapper (Zod-parsed, TrelloError)
-src/server/modules/sync/sync.plan.ts                pure sync diff (unit-tested)
-src/server/modules/workflow/workflow.service.ts     every status change (move, start, retry, follow-up, discard)
-src/server/modules/runs/*                           queue, executor, registry, SSE stream, prompt, runners/
-src/server/modules/git/*                            repo validation, worktrees, shared-branch checkout, changes, commit/push, diff parser
-src/server/presenters/*.presenter.ts                Prisma row → DTO (types/*)
-src/app/api/**/route.ts                             thin handlers via route()
-src/schemas/*.ts                                    Zod, shared by forms and routes
-src/services/api/*.ts → src/hooks/*.ts              fetch client → React Query hooks
-src/components/{board,cards,projects,settings,…}    feature components
-```
-
-## Differences from the shared architecture
-
-Ticket2PR is local-first (spec §1.3), so it drops what only a hosted SaaS needs: no auth, workspaces, billing,
-email, MinIO or Postgres. It uses SQLite through Prisma's better-sqlite3 adapter, binds to 127.0.0.1, and its
-`route()` wrapper rejects requests whose `Host` or `Origin` isn't loopback (DNS rebinding and cross-site posts).
-The UI is dark only, following the Raycast teardown.
-
-## Testing against a fake Trello
-
-`TRELLO_API_BASE` and `GITHUB_API_BASE` point the clients elsewhere (a local mock server), `WORKTREES_DIR` moves the
+`RUNNER="fake"` simulates runs: they stream like real ones and write a `TICKET2PR_FAKE_RUN.md` file in the worktree.
+`TRELLO_API_BASE` and `GITHUB_API_BASE` point the clients at a local mock server, `WORKTREES_DIR` moves the
 worktrees, and `FAKE_RUNNER_STEP_MS` speeds up fake runs. With a throwaway database:
 
 ```bash
 DATABASE_URL="file:/tmp/t2p.db" npx prisma migrate deploy
-DATABASE_URL="file:/tmp/t2p.db" TRELLO_API_BASE="http://127.0.0.1:4599/1" npx next dev -H 127.0.0.1 -p 3010
+DATABASE_URL="file:/tmp/t2p.db" RUNNER=fake TRELLO_API_BASE="http://127.0.0.1:4599/1" npx next dev -H 127.0.0.1 -p 3010
 ```
+
+## Contributing
+
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md), and [SECURITY.md](SECURITY.md) for
+reporting vulnerabilities.
+
+## Disclaimer
+
+Ticket2PR is an independent project, not affiliated with or endorsed by Anthropic or Atlassian (Trello). It runs
+Claude Code on your machine with your own Claude account; you are responsible for using it in line with
+[Anthropic's terms](https://www.anthropic.com/legal) and your Claude plan. Claude can make mistakes: review every
+change before you push it.
+
+## License
+
+[MIT](LICENSE) © Youssef Aserrar
