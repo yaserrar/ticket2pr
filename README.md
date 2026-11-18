@@ -37,6 +37,7 @@ Trello card ──sync──► New ──drag──► In progress ──Claude
 - **Node.js 20.19 or newer** and **git**.
 - **A Claude Pro or Max subscription**, with Claude Code signed in on this machine. Install
   [Claude Code](https://code.claude.com/docs/en/overview), run `claude`, then type `/login` once.
+- **Google Chrome**, only for screenshots of UI changes (optional).
 - **A Trello account.** The setup screen walks you through creating an API key and a token.
 - **Your project's git repository** on this machine, with push access configured as usual (SSH key or credential
   helper). A GitHub token is optional: without one, "Open pull request" opens GitHub's compare page.
@@ -110,6 +111,29 @@ features need a new agreement with the client.
   without asking again.
 - **What maintenance covers** is plain text in Project settings, written like your contract. A sensible default is
   provided. Each check uses a little of your Claude plan.
+
+### Risk flag
+Every card's changes get a risk level after each run, from the diff, with plain rules (no model, so it's instant and
+explainable):
+- **High risk** (red): payments, login and accounts, database and migrations, secrets and deployment, or paths you mark
+  as sensitive in Project settings. The risky files come first in *Changes*, and **Push** and **Open pull request**
+  ask you to confirm "I reviewed the high-risk files carefully". The pull request gets a Risk section and, with a
+  GitHub token, a `high-risk` label.
+- **Medium risk** (amber): regular code, dependency changes, large diffs.
+- **Low risk** (green): small text or style changes, for a quick review.
+
+Tests never raise the level. The level follows the diff: a new run or a manual edit re-assesses it, and a new verdict
+asks for the confirmation again.
+
+### Screenshots for the client
+Turn it on in Project settings with the command that starts your app (for example
+`cp "$REPO_PATH/.env" . && npm run dev -- --port $PORT`). When Claude changes something visible, it names up to three
+public pages that show it; after the run, Ticket2PR starts the app in the card's folder, takes a screenshot of each page
+in headless Google Chrome, and stops the app. In the *Client* tab, pick the screenshots to attach: **Post on Trello**
+uploads them to the card with the client update. **Retake** starts the app again, on the same or other pages.
+- Public pages only: pages that redirect to a login are skipped.
+- The command runs code from your repository, like the setup command. `$PORT` is a free port, `$REPO_PATH` your
+  repository folder (worktrees don't contain untracked files such as `.env`).
 
 ### Claude usage and notifications
 - Runs report your subscription's usage (Settings › Claude Code). At the limit, the queue pauses and the card
@@ -190,6 +214,8 @@ src/server/modules/sync/sync.plan.ts           pure sync diff (unit-tested)
 src/server/modules/workflow/workflow.service.ts  every status change of a card
 src/server/modules/runs/                       queue, executor, live stream, prompt, runners (claude, fake)
 src/server/modules/scope/                      scope check: prompt, read-only classifier (claude, fake), queue
+src/lib/risk.ts, src/server/modules/risk/      risk flag rules (unit-tested) and storage
+src/server/modules/preview/                    start the app, screenshots with Chrome (playwright-core)
 src/server/modules/git/                        repository checks, worktrees, shared branch, diff, commit and push
 src/server/presenters/*.presenter.ts           database row → API shape (src/types/*)
 src/app/api/**/route.ts                        thin handlers through route() (Zod, loopback guard, errors)
@@ -205,7 +231,7 @@ project's conventions (also used by coding agents).
 
 `RUNNER="fake"` simulates runs: they stream like real ones and write a `TICKET2PR_FAKE_RUN.md` file in the worktree.
 Scope checks are simulated too: in scope, unless the card says `[fake:out-of-scope]`, `[fake:unsure]` or
-`[fake:scope-fail]`.
+`[fake:scope-fail]`. `[fake:ui /contact]` makes the fake run name pages for screenshots.
 `TRELLO_API_BASE` and `GITHUB_API_BASE` point the clients at a local mock server, `WORKTREES_DIR` moves the
 worktrees, and `FAKE_RUNNER_STEP_MS` speeds up fake runs. With a throwaway database:
 
