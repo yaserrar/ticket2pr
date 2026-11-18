@@ -6,9 +6,11 @@ import type { CardStatus } from '~/schemas/common';
  * server enforces the same rules in `workflow/transitions.ts`.
  *
  *   NEW ──drag──► IN_PROGRESS ──run succeeds──► REVIEW ──PR opened / drag──► DONE
- *    ▲                 │  ▲                        │
- *    │  discard        │  └──── request changes ───┘
- *    └─────────────────┘
+ *    ▲ │               │  ▲                        │
+ *    │ │  discard      │  └──── request changes ───┘
+ *    └─┼───────────────┘
+ *    ▲ └──out of scope──► OUT_OF_SCOPE   (waits for a new agreement with the client)
+ *    └──── client agreed ────┘
  */
 export type MoveContext = {
   from: CardStatus;
@@ -35,11 +37,27 @@ export type MovePlan =
   | { kind: 'request-changes' }
   | { kind: 'done'; confirm: string | null }
   | { kind: 'reopen' }
+  /** New → Out of scope: the board opens the dialog (note for the client, Trello list). */
+  | { kind: 'out-of-scope' }
+  /** Out of scope → New: the client agreed to the new work, the card can start. */
+  | { kind: 'back-in-scope' }
   | { kind: 'invalid'; message: string };
 
 export function planMove(ctx: MoveContext): MovePlan {
   const { from, to } = ctx;
   if (from === to) return { kind: 'reorder' };
+
+  if (to === 'OUT_OF_SCOPE') {
+    if (from === 'NEW') return { kind: 'out-of-scope' };
+    return { kind: 'invalid', message: 'Only new cards are set aside as out of scope. Move it back to New first.' };
+  }
+  if (from === 'OUT_OF_SCOPE') {
+    if (to === 'NEW') return { kind: 'back-in-scope' };
+    return {
+      kind: 'invalid',
+      message: 'This card waits for a new agreement with the client. Once they agree, move it back to New, then start it.',
+    };
+  }
 
   if (from === 'NEW' && to === 'IN_PROGRESS') {
     if (!ctx.repoConfigured) {

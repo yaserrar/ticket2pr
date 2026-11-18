@@ -41,6 +41,19 @@ export const clientCommentBody = z.object({
 export type ClientCommentInput = z.infer<typeof clientCommentBody>;
 
 /**
+ * `POST /api/cards/{id}/out-of-scope`: set a new card aside. `note` is posted on
+ * the Trello card for the client when given.
+ */
+export const outOfScopeBody = z.object({
+  note: z.string().trim().min(1, 'Write the note, or don’t post one').max(5000, 'Keep it under 5000 characters').nullable(),
+});
+export type OutOfScopeInput = z.infer<typeof outOfScopeBody>;
+
+/** `POST /api/cards/{id}/scope`: check (again) now; `start` begins the work once Claude says it's in scope. */
+export const scopeCheckBody = z.object({ start: z.boolean().default(false) });
+export type ScopeCheckInput = z.input<typeof scopeCheckBody>;
+
+/**
  * Shapes of the JSON columns on `Card` (SQLite stores JSON as String). Parsed
  * defensively in the presenter: a bad row degrades to an empty list.
  */

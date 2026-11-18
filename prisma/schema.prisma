@@ -52,6 +52,9 @@ model Project {
   trelloReviewListId     String?
   trelloDoneListId       String?
   trelloNeedsInfoListId  String? // questions asked on Trello, waiting for the client
+  scopeCheck             Boolean   @default(false) // Claude sorts new cards into in scope / out of scope
+  scopeRules             String? // what the maintenance agreement covers (null = the default rules)
+  trelloOutOfScopeListId String? // write-back: where out-of-scope cards wait on Trello
   lastSyncedAt           DateTime?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
@@ -74,7 +77,7 @@ model Card {
   labelsJson           String    @default("[]") // [{ id, name, color }]
   checklistsJson       String    @default("[]") // [{ id, name, items: [{ id, name, state }] }]
   trelloLastActivity   DateTime
-  status               String    @default("NEW") // NEW | IN_PROGRESS | REVIEW | DONE
+  status               String    @default("NEW") // NEW | IN_PROGRESS | REVIEW | DONE | OUT_OF_SCOPE
   position             Float     @default(0) // order inside a column
   changedOnTrello      Boolean   @default(false) // content changed after work started
   removedFromTrello    Boolean   @default(false) // archived or deleted on Trello
@@ -92,6 +95,18 @@ model Card {
   clientUpdatePostedAt DateTime?
   waitingSince         DateTime? // questions asked on Trello, waiting for an answer
   clientRepliedAt      DateTime? // the client commented while we were waiting
+  // Scope check: is the card covered by the maintenance agreement?
+  scopeStatus          String? // null (not checked) | CHECKING | IN_SCOPE | OUT_OF_SCOPE | UNSURE | FAILED
+  scopeKind            String? // BUG | SMALL_CHANGE | CONTENT | NEW_FEATURE | OTHER
+  scopeSize            String? // SMALL | MEDIUM | LARGE
+  scopeReason          String? // for the developer and the project manager
+  scopeClientNote      String? // Claude's draft note for the client (out of scope or unsure)
+  scopeError           String? // the check, or the automatic start after it, failed
+  scopeContentKey      String? // the card content the verdict was given for
+  scopeCheckedAt       DateTime?
+  scopeApproved        Boolean   @default(false) // the developer started it anyway, or the client agreed to the new work
+  startWhenInScope     Boolean   @default(false) // dragged to In progress before the check finished
+  scopeNotePostedAt    DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   runs                 Run[]

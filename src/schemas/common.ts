@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
-/** Board columns. Ticket2PR owns the status, Trello owns the content (spec §6.3). */
-export const CARD_STATUSES = ['NEW', 'IN_PROGRESS', 'REVIEW', 'DONE'] as const;
+/**
+ * Board columns. Ticket2PR owns the status, Trello owns the content (spec §6.3).
+ * OUT_OF_SCOPE is a side column: new cards set aside until the client agrees to new work.
+ */
+export const CARD_STATUSES = ['NEW', 'IN_PROGRESS', 'REVIEW', 'DONE', 'OUT_OF_SCOPE'] as const;
 export const cardStatusSchema = z.enum(CARD_STATUSES);
 export type CardStatus = z.infer<typeof cardStatusSchema>;
 

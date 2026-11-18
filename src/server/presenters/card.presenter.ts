@@ -4,6 +4,8 @@ import type { Card, Run } from '~/generated/prisma/client';
 import { cardChecklistsSchema, cardLabelsSchema } from '~/schemas/card';
 import { cardStatusSchema } from '~/schemas/common';
 import { isActiveRunStatus } from '~/lib/workflow';
+import { scopeKindSchema, scopeSizeSchema, scopeStatusSchema } from '~/lib/scope';
+import { scopeContentKey } from '~/server/modules/scope/scope-content';
 import type { CardDto } from '~/types/card';
 import type { RunStatus } from '~/types/run';
 
@@ -61,6 +63,19 @@ export function presentCard(
     clientUpdatePostedAt: row.clientUpdatePostedAt?.toISOString() ?? null,
     waitingSince: row.waitingSince?.toISOString() ?? null,
     clientRepliedAt: row.clientRepliedAt?.toISOString() ?? null,
+    scope: {
+      status: scopeStatusSchema.nullable().catch(null).parse(row.scopeStatus),
+      kind: scopeKindSchema.nullable().catch(null).parse(row.scopeKind),
+      size: scopeSizeSchema.nullable().catch(null).parse(row.scopeSize),
+      reason: row.scopeReason,
+      clientNote: row.scopeClientNote,
+      error: row.scopeError,
+      checkedAt: row.scopeCheckedAt?.toISOString() ?? null,
+      stale: Boolean(row.scopeContentKey) && row.scopeContentKey !== scopeContentKey(row),
+      approved: row.scopeApproved,
+      startWhenInScope: row.startWhenInScope,
+      notePostedAt: row.scopeNotePostedAt?.toISOString() ?? null,
+    },
     activeRun:
       latest && latestStatus && isActiveRunStatus(latestStatus)
         ? { id: latest.id, status: latestStatus, queuePosition: ctx.queuePositions?.get(latest.id) ?? null }

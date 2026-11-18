@@ -21,6 +21,11 @@ export type ProjectDto = {
   trelloReviewListId: string | null;
   trelloDoneListId: string | null;
   trelloNeedsInfoListId: string | null;
+  /** Claude sorts new cards into in scope / out of scope of the maintenance agreement. */
+  scopeCheck: boolean;
+  /** null: the default rules (DEFAULT_SCOPE_RULES). */
+  scopeRules: string | null;
+  trelloOutOfScopeListId: string | null;
   lastSyncedAt: ISODate | null;
   /** Error of the latest sync, when it failed. */
   lastSyncError: string | null;

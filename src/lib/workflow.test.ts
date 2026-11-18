@@ -52,6 +52,15 @@ describe('planMove', () => {
     expect(planMove(ctx('DONE', 'REVIEW')).kind).toBe('reopen');
   });
 
+  it('sets new cards aside as out of scope, and brings them back to New only', () => {
+    expect(planMove(ctx('NEW', 'OUT_OF_SCOPE')).kind).toBe('out-of-scope');
+    expect(planMove(ctx('OUT_OF_SCOPE', 'NEW')).kind).toBe('back-in-scope');
+    for (const s of ['IN_PROGRESS', 'REVIEW', 'DONE'] as const) {
+      expect(planMove(ctx(s, 'OUT_OF_SCOPE')).kind).toBe('invalid');
+      expect(planMove(ctx('OUT_OF_SCOPE', s)).kind).toBe('invalid');
+    }
+  });
+
   it('rejects every other move', () => {
     const rejected: [CardStatus, CardStatus][] = [
       ['NEW', 'REVIEW'],

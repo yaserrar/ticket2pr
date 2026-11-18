@@ -41,6 +41,12 @@ export const projectBody = z.object({
   trelloReviewListId: trelloIdSchema.nullable(),
   trelloDoneListId: trelloIdSchema.nullable(),
   trelloNeedsInfoListId: trelloIdSchema.nullable(),
+  /** Claude sorts new cards into in scope / out of scope of the maintenance agreement. */
+  scopeCheck: z.boolean(),
+  /** What the agreement covers. Empty = Ticket2PR's default rules. */
+  scopeRules: z.string().trim().max(6000, 'Keep it under 6000 characters'),
+  /** Write-back: where out-of-scope cards wait on Trello (null = don't move). */
+  trelloOutOfScopeListId: trelloIdSchema.nullable(),
 });
 export type ProjectInput = z.infer<typeof projectBody>;
 
