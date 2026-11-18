@@ -34,6 +34,7 @@ const TONE_TEXT: Record<Tone, string> = {
 export function scopeHeadline(card: CardDto): { title: string; tone: Tone; icon: typeof ShieldTick } | null {
   const { scope } = card;
   if (card.status === 'OUT_OF_SCOPE') return { title: 'Waiting for a new agreement with the client', tone: 'danger', icon: ShieldCross };
+  if (scope.approved && scope.status !== 'CHECKING') return { title: 'Approved to start', tone: 'success', icon: ShieldTick };
   switch (scope.status) {
     case 'CHECKING':
       return { title: 'Checking the scope…', tone: 'neutral', icon: ShieldSearch };
@@ -111,7 +112,13 @@ export function ScopeSection({ card }: { card: CardDto }) {
         {!checking && scope.status !== 'FAILED' && scope.error ? <p className="text-danger-muted">{scope.error}</p> : null}
         {!scope.status && card.status === 'NEW' ? <p>Claude reads each new card and says whether maintenance covers it.</p> : null}
         {scope.stale && !checking ? <p className="text-warning-muted">The card changed on Trello since this check.</p> : null}
-        {scope.approved && card.status === 'NEW' ? <p>You approved this card: it starts without asking again.</p> : null}
+        {scope.approved && card.status === 'NEW' ? (
+          <p>
+            {scope.status === 'IN_SCOPE' || !scope.status
+              ? 'It starts without asking again.'
+              : 'Approved despite Claude’s verdict (started anyway, or the client agreed to the new work). It starts without asking again.'}
+          </p>
+        ) : null}
         {card.status === 'OUT_OF_SCOPE' ? (
           <p>
             {scope.notePostedAt ? (

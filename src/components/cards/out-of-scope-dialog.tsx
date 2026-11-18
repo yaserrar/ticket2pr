@@ -4,7 +4,7 @@ import * as React from 'react';
 import { InfoCircle } from 'iconsax-react';
 import { toast } from 'sonner';
 import { Button } from '~/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '~/components/ui/dialog';
 import { Field, FieldDescription, FieldError, FieldLabel } from '~/components/ui/field';
 import { Switch } from '~/components/ui/switch';
 import { Textarea } from '~/components/ui/textarea';
@@ -101,14 +101,14 @@ function OutOfScopeForm({ card, onDone }: { card: CardDto; onDone: () => void })
 
       <FieldError>{error}</FieldError>
 
-      <DialogFooter>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button type="button" variant="ghost" onClick={onDone} disabled={mutation.isPending}>
           Cancel
         </Button>
         <Button type="submit" loading={mutation.isPending}>
           {post ? 'Post note and set aside' : 'Set aside'}
         </Button>
-      </DialogFooter>
+      </div>
     </form>
   );
 }

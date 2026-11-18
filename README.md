@@ -22,7 +22,8 @@ Trello card ──sync──► New ──drag──► In progress ──Claude
                        └──── discard ───┘  └──── request changes ────────┘
 ```
 
-1. **Sync.** New cards from the Trello list you choose appear in *New* (polling plus a Refresh button).
+1. **Sync.** New cards from the Trello list you choose appear in *New* (polling plus a Refresh button). With the
+   optional **scope check**, Claude first says whether each card is covered by maintenance (see below).
 2. **Run.** Dragging a card to *In progress* creates a branch and a git worktree for it, then starts Claude Code
    there. The card's title, description, checklist, comments and attachments (screenshots too) are its instructions.
    You watch the run live.
@@ -93,11 +94,28 @@ Claude.
 - **Move cards on Trello** (optional): choose a list for In progress, Review, Needs info and Done. Failures never
   block anything; the card shows a badge.
 
+### Scope check (projects in maintenance)
+Turn it on in Project settings when a finished project is in maintenance: bugs and small changes are covered, new
+features need a new agreement with the client.
+- **On arrival**, Claude reads each new card and looks through the repository (read-only: Read, Glob and Grep, nothing
+  else) to judge the size of the work. The card gets a badge: *In scope*, *Out of scope?* or *Scope unclear*, with a
+  short reason, the kind of request and a size estimate.
+- **You decide.** An in-scope card starts as usual. Starting a card Claude flagged asks first (**Start anyway**). A card
+  dragged before its verdict waits for it and starts on its own if it's in scope. Cards edited on Trello are checked
+  again.
+- **Set aside as out of scope** moves the card to the *Out of scope* column and, optionally, to a Trello list your
+  project manager watches. You can post a polite note on the card for the client (Claude drafts it in the card's
+  language; you edit it first).
+- **When the client agrees**, move the card back to *New* (or move it back to the source list on Trello): it can start
+  without asking again.
+- **What maintenance covers** is plain text in Project settings, written like your contract. A sensible default is
+  provided. Each check uses a little of your Claude plan.
+
 ### Claude usage and notifications
 - Runs report your subscription's usage (Settings › Claude Code). At the limit, the queue pauses and the card
   continues on its own after the reset, resuming the same session. **Resume now** lifts the pause.
 - Optional desktop notifications while the app is open in a tab: a run is ready or failed, Claude has questions, the
-  client replied, the usage limit paused the queue.
+  client replied, a new card looks out of scope, the usage limit paused the queue.
 
 ## What Claude may do
 
@@ -171,6 +189,7 @@ src/server/modules/trello/                     typed Trello client, write-back, 
 src/server/modules/sync/sync.plan.ts           pure sync diff (unit-tested)
 src/server/modules/workflow/workflow.service.ts  every status change of a card
 src/server/modules/runs/                       queue, executor, live stream, prompt, runners (claude, fake)
+src/server/modules/scope/                      scope check: prompt, read-only classifier (claude, fake), queue
 src/server/modules/git/                        repository checks, worktrees, shared branch, diff, commit and push
 src/server/presenters/*.presenter.ts           database row → API shape (src/types/*)
 src/app/api/**/route.ts                        thin handlers through route() (Zod, loopback guard, errors)
@@ -185,6 +204,8 @@ project's conventions (also used by coding agents).
 ### Testing without Trello or Claude
 
 `RUNNER="fake"` simulates runs: they stream like real ones and write a `TICKET2PR_FAKE_RUN.md` file in the worktree.
+Scope checks are simulated too: in scope, unless the card says `[fake:out-of-scope]`, `[fake:unsure]` or
+`[fake:scope-fail]`.
 `TRELLO_API_BASE` and `GITHUB_API_BASE` point the clients at a local mock server, `WORKTREES_DIR` moves the
 worktrees, and `FAKE_RUNNER_STEP_MS` speeds up fake runs. With a throwaway database:
 

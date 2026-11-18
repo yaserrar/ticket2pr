@@ -53,7 +53,14 @@ export const scopeService = {
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { scopeCheck: true } });
     if (!project?.scopeCheck) return;
     const cards = await prisma.card.findMany({
-      where: { projectId, status: 'NEW', scopeApproved: false, removedFromTrello: false, NOT: { scopeStatus: 'CHECKING' } },
+      // Spelled out: `NOT { scopeStatus: 'CHECKING' }` would also drop never-checked cards (SQL NULL).
+      where: {
+        projectId,
+        status: 'NEW',
+        scopeApproved: false,
+        removedFromTrello: false,
+        OR: [{ scopeStatus: null }, { scopeStatus: { not: 'CHECKING' } }],
+      },
       select: { id: true, scopeStatus: true, scopeContentKey: true, title: true, description: true, labelsJson: true, checklistsJson: true },
     });
     const ids = cards.filter((c) => all || !c.scopeStatus || c.scopeContentKey !== scopeContentKey(c)).map((c) => c.id);
