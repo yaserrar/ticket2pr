@@ -16,6 +16,7 @@ import { plural } from '~/lib/format';
 import { cn } from '~/lib/utils';
 import type { CardDto } from '~/types/card';
 import type { ContentChange, TrelloCommentDto } from '~/types/client-loop';
+import { ScreenshotPicker } from './screenshots';
 
 /** The tab deserves attention: something new from the client, or questions to send. */
 export function clientNeedsAttention(card: CardDto) {
@@ -232,6 +233,15 @@ function UpdateSection({ card }: { card: CardDto }) {
   const [text, setText] = React.useState(card.clientUpdate ?? '');
   const [error, setError] = React.useState<string | null>(null);
   const post = useClientComment(card.projectId, card.id);
+  const files = card.preview.screenshots.map((s) => s.file);
+  const [selected, setSelected] = React.useState(files);
+  // New screenshots (after a run or a retake) are all included again.
+  const [seen, setSeen] = React.useState(files.join());
+  if (seen !== files.join()) {
+    setSeen(files.join());
+    setSelected(files);
+  }
+  const attach = selected.filter((f) => files.includes(f));
 
   return (
     <Section title="Update for the client" icon={MessageText1}>
@@ -239,6 +249,7 @@ function UpdateSection({ card }: { card: CardDto }) {
         Written by Claude in plain words. Edit it, then post it on the Trello card when the work is ready for them.
       </p>
       <Textarea value={text} onChange={(e) => setText(e.target.value)} className="min-h-20 text-[13px]" aria-label="Update for the client" />
+      <ScreenshotPicker card={card} selected={selected} onSelectedChange={setSelected} />
       {error ? <p className="text-[13px] text-danger-muted">{error}</p> : null}
       <div className="flex flex-wrap items-center gap-3">
         <ReasonButton
@@ -248,11 +259,15 @@ function UpdateSection({ card }: { card: CardDto }) {
           reason={card.removedFromTrello ? 'This card was removed from Trello.' : !text.trim() ? 'Write the message first.' : null}
           onClick={() => {
             setError(null);
-            post.mutate({ kind: 'UPDATE', text }, { onSuccess: () => toast.success('Posted on Trello'), onError: (e) => setError(getErrorMessage(e)) });
+            post.mutate(
+              { kind: 'UPDATE', text, screenshots: attach },
+              { onSuccess: () => toast.success('Posted on Trello'), onError: (e) => setError(getErrorMessage(e)) },
+            );
           }}
         >
           <Send2 className="size-4" />
           {card.clientUpdatePostedAt ? 'Post again' : 'Post on Trello'}
+          {attach.length ? ` with ${attach.length === 1 ? 'the screenshot' : `${attach.length} screenshots`}` : ''}
         </ReasonButton>
         {card.clientUpdatePostedAt ? (
           <span className="flex items-center gap-1.5 text-xs text-success-muted">

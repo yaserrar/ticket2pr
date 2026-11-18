@@ -4,7 +4,16 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { qk } from '~/lib/query-keys';
 import { cardsApi } from '~/services/api/cards';
 import { CARD_STATUSES, type CardStatus } from '~/schemas/common';
-import type { ClientCommentInput, CommitInput, CreateRunInput, OutOfScopeInput, PullRequestInput, ScopeCheckInput } from '~/schemas/card';
+import type {
+  ClientCommentInput,
+  CommitInput,
+  CreateRunInput,
+  OpenPrInput,
+  OutOfScopeInput,
+  PushInput,
+  RetakeScreenshotsInput,
+  ScopeCheckInput,
+} from '~/schemas/card';
 import type { BoardDto, CardDto } from '~/types/card';
 
 /** Looks a card up in the board cache. */
@@ -120,7 +129,7 @@ export const useCommit = (projectId: string, cardId: string) => {
 export const usePush = (projectId: string, cardId: string) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => cardsApi.push(cardId),
+    mutationFn: (body: PushInput) => cardsApi.push(cardId, body),
     meta: { silent: true },
     onSettled: (data) => refreshCard(qc, projectId, cardId, { git: !data?.done }),
   });
@@ -164,7 +173,7 @@ export const useCleanupCard = (projectId: string, cardId: string) => {
 export const useOpenPr = (projectId: string, cardId: string) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: PullRequestInput) => cardsApi.openPr(cardId, body),
+    mutationFn: (body: OpenPrInput) => cardsApi.openPr(cardId, body),
     meta: { silent: true },
     onSettled: () => refreshCard(qc, projectId, cardId),
   });
@@ -184,6 +193,16 @@ export const useOutOfScope = (projectId: string, cardId: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: OutOfScopeInput) => cardsApi.outOfScope(cardId, body),
+    meta: { silent: true },
+    onSettled: () => refreshCard(qc, projectId, cardId, { git: false }),
+  });
+};
+
+/** Start the app again and retake the screenshots (optionally on other pages). */
+export const useRetakeScreenshots = (projectId: string, cardId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: RetakeScreenshotsInput) => cardsApi.retakeScreenshots(cardId, body),
     meta: { silent: true },
     onSettled: () => refreshCard(qc, projectId, cardId, { git: false }),
   });

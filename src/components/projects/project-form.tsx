@@ -16,6 +16,7 @@ import { isApiError } from '~/lib/api-errors';
 import { RepoFields } from './repo-fields';
 import { WriteBackFields } from './write-back-fields';
 import { ScopeFields } from './scope-fields';
+import { ReviewFields } from './review-fields';
 import { DEFAULT_SCOPE_RULES } from '~/lib/scope';
 
 /**
@@ -53,6 +54,10 @@ export function ProjectForm({
       scopeCheck: project?.scopeCheck ?? false,
       scopeRules: project?.scopeRules ?? DEFAULT_SCOPE_RULES,
       trelloOutOfScopeListId: project?.trelloOutOfScopeListId ?? null,
+      riskPaths: project?.riskPaths ?? '',
+      previewEnabled: project?.previewEnabled ?? false,
+      previewCommand: project?.previewCommand ?? '',
+      previewUrl: project?.previewUrl ?? '',
     },
   });
   const boardId = useWatch({ control: form.control, name: 'trelloBoardId' });
@@ -178,6 +183,11 @@ export function ProjectForm({
         <p className="text-[13px] text-muted-foreground">Needed to start work on cards. You can add it later.</p>
       </div>
       <RepoFields form={form} initialPath={project?.repoPath} />
+
+      <div className="flex flex-col gap-1 border-t pt-5">
+        <h3 className="eyebrow font-medium text-subtle-foreground">Review</h3>
+      </div>
+      <ReviewFields form={form} />
 
       <FormError message={pickerError ? getErrorMessage(pickerError) : null} />
       <FormError message={formError} />

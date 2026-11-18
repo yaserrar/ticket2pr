@@ -3,8 +3,10 @@ import type {
   CommitInput,
   CreateRunInput,
   MoveCardInput,
+  OpenPrInput,
   OutOfScopeInput,
-  PullRequestInput,
+  PushInput,
+  RetakeScreenshotsInput,
   ScopeCheckInput,
 } from '~/schemas/card';
 import type { TrelloUpdatesDto } from '~/types/client-loop';
@@ -24,7 +26,7 @@ export const cardsApi = {
   git: (cardId: string) => api.get<GitStatusDto>(`/cards/${cardId}/git`),
   commit: (cardId: string, body: CommitInput) => api.post<{ sha: string }>(`/cards/${cardId}/commit`, body),
   /** `done`: a shared-branch card moved to Done after the push. */
-  push: (cardId: string) => api.post<{ ok: true; branchName: string; done: boolean }>(`/cards/${cardId}/push`),
+  push: (cardId: string, body: PushInput) => api.post<{ ok: true; branchName: string; done: boolean }>(`/cards/${cardId}/push`, body),
   updateBase: (cardId: string) => api.post<{ merged: number; baseRef: string }>(`/cards/${cardId}/update-base`),
   cleanup: (cardId: string) =>
     api.post<{ removedWorktree: boolean; deletedBranch: boolean; keptBranchReason: string | null }>(`/cards/${cardId}/cleanup`),
@@ -33,6 +35,7 @@ export const cardsApi = {
   clientComment: (cardId: string, body: ClientCommentInput) => api.post<CardDto>(`/cards/${cardId}/client-comment`, body),
   checkScope: (cardId: string, body: ScopeCheckInput) => api.post<CardDto>(`/cards/${cardId}/scope`, body),
   outOfScope: (cardId: string, body: OutOfScopeInput) => api.post<CardDto>(`/cards/${cardId}/out-of-scope`, body),
-  openPr: (cardId: string, body: PullRequestInput) =>
+  retakeScreenshots: (cardId: string, body: RetakeScreenshotsInput) => api.post<CardDto>(`/cards/${cardId}/screenshots`, body),
+  openPr: (cardId: string, body: OpenPrInput) =>
     api.post<{ prUrl: string | null; compareUrl: string | null }>(`/cards/${cardId}/pr`, body),
 };

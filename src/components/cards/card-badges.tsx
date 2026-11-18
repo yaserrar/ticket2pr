@@ -11,7 +11,9 @@ import {
   ShieldTick,
   TickCircle,
   Timer1,
+  Warning2,
 } from 'iconsax-react';
+import { RISK_META } from '~/lib/risk';
 import { cn } from '~/lib/utils';
 import type { CardDto } from '~/types/card';
 
@@ -52,9 +54,21 @@ function scopeBadge(card: CardDto) {
  * removed, moved; the questions loop with the client; write-back failures.
  * On new cards, the scope check comes first.
  */
+/** After a run: how carefully the changes must be reviewed. */
+function riskBadge(card: CardDto) {
+  if (!card.risk || card.activeRun || (card.status !== 'IN_PROGRESS' && card.status !== 'REVIEW')) return null;
+  const meta = RISK_META[card.risk.level];
+  const title = `${meta.review}${card.risk.areas.length ? `: ${card.risk.areas.map((a) => a.label).join(', ')}` : ''}`;
+  const tone = card.risk.level === 'HIGH' ? DANGER : card.risk.level === 'MEDIUM' ? WARNING : SUCCESS;
+  const icon = card.risk.level === 'HIGH' ? Danger : card.risk.level === 'MEDIUM' ? Warning2 : ShieldTick;
+  const reviewed = card.risk.level === 'HIGH' && card.risk.reviewedAt;
+  return { key: 'risk', icon, label: reviewed ? 'High risk · reviewed' : meta.label, tone, title };
+}
+
 export function CardBadges({ card, className }: { card: CardDto; className?: string }) {
   const badges = [
     scopeBadge(card),
+    riskBadge(card),
     card.removedFromTrello
       ? { key: 'removed', icon: ArchiveSlash, label: 'Removed from Trello', tone: 'border-border-strong bg-fill text-muted-foreground' }
       : null,

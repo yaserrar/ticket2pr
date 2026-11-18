@@ -1,5 +1,7 @@
 'use client';
 
+import * as React from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { DocumentText1, Refresh, RotateLeft } from 'iconsax-react';
 import { toast } from 'sonner';
 import { confirm } from '~/components/shared/confirm-dialog';
@@ -12,12 +14,31 @@ import { getErrorMessage } from '~/lib/api-errors';
 import { plural } from '~/lib/format';
 import type { CardDto } from '~/types/card';
 import { DiffFileView, DiffStat } from './diff-view';
+import { RiskPanel } from './risk';
+import { useBoard } from '~/hooks/projects';
+import { assessRisk, parseRiskPaths } from '~/lib/risk';
+import { qk } from '~/lib/query-keys';
 
 /** Changes tab (spec §8.3, §11.4): what the branch changes vs the base, file by file. */
 export function ChangesTab({ card }: { card: CardDto }) {
   const running = card.activeRun?.status === 'RUNNING';
   const changes = useChanges(card.id, card.hasWorktree, running);
   const reset = useResetChanges(card.projectId, card.id);
+  const board = useBoard(card.projectId);
+  const qc = useQueryClient();
+
+  // The risk of the diff on screen (same rules as the server, which stores it when it reads the diff).
+  const riskPaths = board.data?.project.riskPaths;
+  const risk = React.useMemo(
+    () => (changes.data?.files.length ? assessRisk(changes.data.files, parseRiskPaths(riskPaths)) : null),
+    [changes.data, riskPaths],
+  );
+  const riskKey = risk ? JSON.stringify([risk.level, risk.areas]) : null;
+  const cardRiskKey = card.risk ? JSON.stringify([card.risk.level, card.risk.areas]) : null;
+  React.useEffect(() => {
+    // The server stored a new verdict: refresh the board (badge, push confirmation).
+    if (riskKey && riskKey !== cardRiskKey) void qc.invalidateQueries({ queryKey: qk.projects.board(card.projectId) });
+  }, [riskKey, cardRiskKey, qc, card.projectId]);
 
   if (!card.hasWorktree) {
     return (
@@ -49,8 +70,11 @@ export function ChangesTab({ card }: { card: CardDto }) {
     );
   }
 
-  const { files, stats, baseRef } = changes.data;
+  const { stats, baseRef } = changes.data;
   const totalLines = stats.additions + stats.deletions;
+  // High-risk files first: they deserve the closest look.
+  const risky = new Set(risk?.areas.filter((a) => a.level === 'HIGH').flatMap((a) => a.files) ?? []);
+  const files = risky.size ? [...changes.data.files].sort((a, b) => Number(risky.has(b.path)) - Number(risky.has(a.path))) : changes.data.files;
 
   return (
     <div className="flex flex-col gap-4">
@@ -90,10 +114,12 @@ export function ChangesTab({ card }: { card: CardDto }) {
         </div>
       </div>
 
+      {risk ? <RiskPanel risk={{ ...risk, reviewedAt: riskKey === cardRiskKey ? (card.risk?.reviewedAt ?? null) : null }} /> : null}
+
       {files.length ? (
         <div className="flex flex-col gap-2">
           {files.map((file, i) => (
-            <DiffFileView key={file.path} file={file} defaultOpen={totalLines < 600 || i === 0} />
+            <DiffFileView key={file.path} file={file} defaultOpen={totalLines < 600 || i === 0 || risky.has(file.path)} />
           ))}
         </div>
       ) : (
