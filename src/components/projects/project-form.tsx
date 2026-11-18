@@ -15,6 +15,8 @@ import type { ProjectDto } from '~/types/project';
 import { isApiError } from '~/lib/api-errors';
 import { RepoFields } from './repo-fields';
 import { WriteBackFields } from './write-back-fields';
+import { ScopeFields } from './scope-fields';
+import { DEFAULT_SCOPE_RULES } from '~/lib/scope';
 
 /**
  * Project form (spec §11.2): Trello board → source list → name, then the
@@ -48,6 +50,9 @@ export function ProjectForm({
       trelloReviewListId: project?.trelloReviewListId ?? null,
       trelloDoneListId: project?.trelloDoneListId ?? null,
       trelloNeedsInfoListId: project?.trelloNeedsInfoListId ?? null,
+      scopeCheck: project?.scopeCheck ?? false,
+      scopeRules: project?.scopeRules ?? DEFAULT_SCOPE_RULES,
+      trelloOutOfScopeListId: project?.trelloOutOfScopeListId ?? null,
     },
   });
   const boardId = useWatch({ control: form.control, name: 'trelloBoardId' });
@@ -63,7 +68,7 @@ export function ProjectForm({
     const next = boards.data?.find((b) => b.id === nextId);
     onChange(nextId);
     form.setValue('trelloSourceListId', '', { shouldValidate: false });
-    for (const field of ['trelloInProgressListId', 'trelloReviewListId', 'trelloDoneListId', 'trelloNeedsInfoListId'] as const) {
+    for (const field of ['trelloInProgressListId', 'trelloReviewListId', 'trelloDoneListId', 'trelloNeedsInfoListId', 'trelloOutOfScopeListId'] as const) {
       form.setValue(field, null);
     }
     // Keep a custom name; otherwise follow the board name.
@@ -162,6 +167,11 @@ export function ProjectForm({
       <FormField control={form.control} name="name" label="Project name" placeholder="Client website" />
 
       <WriteBackFields form={form} lists={lists.data} disabled={!boardId || lists.isPending} />
+
+      <div className="flex flex-col gap-1 border-t pt-5">
+        <h3 className="eyebrow font-medium text-subtle-foreground">Scope</h3>
+      </div>
+      <ScopeFields form={form} lists={lists.data} disabled={!boardId || lists.isPending} />
 
       <div className="flex flex-col gap-1 border-t pt-5">
         <h3 className="eyebrow font-medium text-subtle-foreground">Repository</h3>

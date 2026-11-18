@@ -4,8 +4,9 @@ import * as React from 'react';
 import { toast } from 'sonner';
 import { confirm } from '~/components/shared/confirm-dialog';
 import { STATUS_META } from '~/constants/statuses';
-import { useMoveCard } from '~/hooks/cards';
+import { useCheckScope, useMoveCard } from '~/hooks/cards';
 import { planMove } from '~/lib/workflow';
+import { cardScopeGate } from '~/lib/scope-card';
 import type { CardStatus } from '~/schemas/common';
 import type { CardDto } from '~/types/card';
 import type { ProjectDto } from '~/types/project';
@@ -15,8 +16,13 @@ import type { ProjectDto } from '~/types/project';
  * the same rules as the server, explains refusals, asks before destructive
  * moves, then moves optimistically. Returns false when nothing was moved.
  */
-export function useCardMover(project: ProjectDto | undefined, onRequestChanges: (card: CardDto) => void) {
+export function useCardMover(
+  project: ProjectDto | undefined,
+  onRequestChanges: (card: CardDto) => void,
+  onOutOfScope: (card: CardDto) => void,
+) {
   const move = useMoveCard(project?.id ?? '');
+  const checkScope = useCheckScope(project?.id ?? '');
 
   return React.useCallback(
     async (card: CardDto, to: CardStatus, position: number): Promise<boolean> => {
@@ -58,14 +64,37 @@ export function useCardMover(project: ProjectDto | undefined, onRequestChanges: 
           move.mutate({ card, status: to, position, confirmed: true });
           return true;
         }
-        case 'start':
-          move.mutate({ card, status: to, position }, { onSuccess: () => toast.success(`Started “${card.title}”`) });
+        case 'out-of-scope':
+          setTimeout(() => onOutOfScope(card), 220);
+          return false;
+        case 'back-in-scope':
+          move.mutate({ card, status: to, position }, { onSuccess: () => toast.success(`“${card.title}” is back in New`, { description: 'It can start now.' }) });
           return true;
+        case 'start': {
+          const gate = cardScopeGate(card, project);
+          if (gate.kind === 'check' || gate.kind === 'wait') {
+            // The card stays in New until Claude says it's in scope, then starts on its own.
+            checkScope.mutate(
+              { cardId: card.id, start: true },
+              { onSuccess: () => toast.info('Checking the scope first', { description: 'It starts on its own if it’s in scope.' }) },
+            );
+            return false;
+          }
+          if (gate.kind === 'confirm') {
+            const ok = await confirm({ title: gate.title, description: gate.message, confirmLabel: 'Start anyway' });
+            if (!ok) return false;
+          }
+          move.mutate(
+            { card, status: to, position, confirmed: gate.kind === 'confirm' },
+            { onSuccess: () => toast.success(`Started “${card.title}”`) },
+          );
+          return true;
+        }
         default:
           move.mutate({ card, status: to, position });
           return true;
       }
     },
-    [project, move, onRequestChanges],
+    [project, move, checkScope, onRequestChanges, onOutOfScope],
   );
 }

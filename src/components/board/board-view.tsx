@@ -6,6 +6,7 @@ import { parseAsString, useQueryState } from 'nuqs';
 import { InfoCircle, Warning2 } from 'iconsax-react';
 import { CardSheet } from '~/components/cards/card-sheet';
 import { RequestChangesDialog } from '~/components/cards/request-changes';
+import { OutOfScopeDialog } from '~/components/cards/out-of-scope-dialog';
 import { EmptyState } from '~/components/shared/empty-state';
 import { Button } from '~/components/ui/button';
 import { Skeleton } from '~/components/ui/skeleton';
@@ -35,6 +36,7 @@ export function BoardView({ projectId }: { projectId: string }) {
   const { refresh, isPending: refreshing } = useRefreshBoard(projectId);
   const [cardId, setCardId] = useQueryState('card', parseAsString.withOptions({ history: 'push' }));
   const [requestChangesFor, setRequestChangesFor] = React.useState<CardDto | null>(null);
+  const [outOfScopeFor, setOutOfScopeFor] = React.useState<CardDto | null>(null);
   const [, setTab] = useQueryState('tab');
   // Each card opens on the tab that suits its state.
   const openCard = React.useCallback(
@@ -100,6 +102,7 @@ export function BoardView({ projectId }: { projectId: string }) {
           selectedId={cardId}
           onOpen={openCard}
           onRequestChanges={setRequestChangesFor}
+          onOutOfScope={setOutOfScopeFor}
           emptyNew={
             total === 0 ? (
               <span className="leading-relaxed">
@@ -112,6 +115,7 @@ export function BoardView({ projectId }: { projectId: string }) {
       </div>
 
       <RequestChangesDialog card={requestChangesFor} onOpenChange={(open) => !open && setRequestChangesFor(null)} />
+      <OutOfScopeDialog card={outOfScopeFor} onOpenChange={(open) => !open && setOutOfScopeFor(null)} />
       <CardSheet
         projectId={projectId}
         cardId={cardId}
@@ -162,7 +166,7 @@ function BoardSkeleton() {
         <Skeleton className="h-8 w-28" />
       </div>
       <div className="flex min-h-0 flex-1 gap-3 overflow-hidden px-4 pb-4 sm:px-5">
-        {CARD_STATUSES.map((s, i) => (
+        {CARD_STATUSES.filter((s) => s !== 'OUT_OF_SCOPE').map((s, i) => (
           <div key={s} className="flex w-[300px] shrink-0 flex-col gap-2 xl:w-auto xl:flex-1">
             <Skeleton className="h-4 w-24" />
             <div className="flex flex-1 flex-col gap-2 rounded-2xl border bg-fill-faint p-2">

@@ -25,6 +25,7 @@ import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { motion, useReducedMotion } from 'motion/react';
 import { STATUS_META } from '~/constants/statuses';
 import { planMove, positionBetween } from '~/lib/workflow';
+import { cardScopeGate } from '~/lib/scope-card';
 import { CARD_STATUSES, type CardStatus } from '~/schemas/common';
 import type { BoardDto, CardDto } from '~/types/card';
 import type { ProjectDto } from '~/types/project';
@@ -47,8 +48,16 @@ function dropHint(card: CardDto, to: CardStatus, project: ProjectDto): string | 
     sharedBranch,
   });
   switch (plan.kind) {
-    case 'start':
+    case 'start': {
+      const gate = cardScopeGate(card, project);
+      if (gate.kind === 'check' || gate.kind === 'wait') return 'Drop to check the scope first: it starts if it’s in scope';
+      if (gate.kind === 'confirm') return `${gate.title}: drop to decide`;
       return sharedBranch ? `Drop to start a run on ${project.sharedBranch || project.baseBranch}` : 'Drop to create a branch and start a run';
+    }
+    case 'out-of-scope':
+      return 'Drop to set it aside until the client agrees to new work';
+    case 'back-in-scope':
+      return 'Drop when the client agreed to the new work';
     case 'request-changes':
       return 'Drop to request changes';
     case 'discard':
@@ -60,8 +69,13 @@ function dropHint(card: CardDto, to: CardStatus, project: ProjectDto): string | 
   }
 }
 
+/** The side column for out-of-scope cards shows when the project checks scope, or holds cards. */
+export function visibleStatuses(board: BoardDto): CardStatus[] {
+  return CARD_STATUSES.filter((s) => s !== 'OUT_OF_SCOPE' || board.project.scopeCheck || board.columns.OUT_OF_SCOPE.length > 0);
+}
+
 /**
- * The Kanban canvas (spec §11.3): four columns, drag and drop across and
+ * The Kanban canvas (spec §11.3): four columns (five with Out of scope), drag and drop across and
  * within them with a lifted overlay, keyboard dragging and screen-reader
  * announcements. Every drop goes through useCardMover (workflow rules).
  */
@@ -70,16 +84,19 @@ export function KanbanBoard({
   selectedId,
   onOpen,
   onRequestChanges,
+  onOutOfScope,
   emptyNew,
 }: {
   board: BoardDto;
   selectedId: string | null;
   onOpen: (cardId: string) => void;
   onRequestChanges: (card: CardDto) => void;
+  onOutOfScope: (card: CardDto) => void;
   emptyNew?: React.ReactNode;
 }) {
   const reduce = useReducedMotion();
-  const mover = useCardMover(board.project, onRequestChanges);
+  const mover = useCardMover(board.project, onRequestChanges, onOutOfScope);
+  const statuses = visibleStatuses(board);
 
   const derived = React.useMemo<Items>(
     () => Object.fromEntries(CARD_STATUSES.map((s) => [s, board.columns[s].map((c) => c.id)])) as Items,
@@ -223,7 +240,7 @@ export function KanbanBoard({
       }}
     >
       <div className="flex h-full min-w-max gap-3 px-4 pb-4 sm:px-5 xl:min-w-0">
-        {CARD_STATUSES.map((status) => (
+        {statuses.map((status) => (
           <BoardColumn
             key={status}
             status={status}

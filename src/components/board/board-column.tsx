@@ -33,7 +33,7 @@ export function BoardColumn({
   const ids = React.useMemo(() => cards.map((c) => c.id), [cards]);
 
   return (
-    <section aria-label={meta.label} className="flex w-[300px] shrink-0 flex-col xl:w-auto xl:min-w-[260px] xl:flex-1">
+    <section aria-label={meta.label} className="flex w-[300px] shrink-0 flex-col xl:w-auto xl:min-w-[220px] xl:flex-1">
       <header className="flex h-9 items-center gap-2 px-1.5">
         <StatusDot status={status} />
         <h2 className="eyebrow font-medium text-muted-foreground">{meta.label}</h2>

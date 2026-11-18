@@ -21,7 +21,7 @@ describe('updateSettingsBody', () => {
 });
 
 describe('projectBody', () => {
-  const repo = { repoPath: '', baseBranch: 'main', setupCommand: '', extraInstructions: '', workMode: 'BRANCH_PER_CARD' as const, sharedBranch: '', sharedInRepo: true, trelloInProgressListId: null, trelloReviewListId: null, trelloDoneListId: null, trelloNeedsInfoListId: null };
+  const repo = { repoPath: '', baseBranch: 'main', setupCommand: '', extraInstructions: '', workMode: 'BRANCH_PER_CARD' as const, sharedBranch: '', sharedInRepo: true, trelloInProgressListId: null, trelloReviewListId: null, trelloDoneListId: null, trelloNeedsInfoListId: null, scopeCheck: false, scopeRules: '', trelloOutOfScopeListId: null };
 
   it('explains a missing board before an invalid id', () => {
     const result = projectBody.safeParse({ ...repo, name: 'Site', trelloBoardId: '', trelloSourceListId: '' });

@@ -10,6 +10,8 @@ import type { CardDto } from '~/types/card';
 import { CardMarkdown } from './card-markdown';
 import { ChecklistView } from './checklist-view';
 import { StatusPill } from './status-dot';
+import { ScopeSection } from './scope-section';
+import { SCOPE_KIND_LABEL } from '~/lib/scope';
 
 /** Details tab (spec §11.4): the Trello content, read-only, and an information table. */
 export function DetailsTab({ card, sourceListName }: { card: CardDto; sourceListName: string }) {
@@ -29,6 +31,8 @@ export function DetailsTab({ card, sourceListName }: { card: CardDto; sourceList
           </Button>
         </Notice>
       ) : null}
+
+      <ScopeSection card={card} />
 
       <Section title="Description">
         {card.description.trim() ? (
@@ -56,6 +60,20 @@ export function DetailsTab({ card, sourceListName }: { card: CardDto; sourceList
           <InfoRow label="Trello list">
             {card.removedFromTrello ? 'Not on Trello' : card.inSourceList ? sourceListName : 'Moved to another list'}
           </InfoRow>
+          {card.scope.status && card.scope.status !== 'CHECKING' && card.status !== 'NEW' && card.status !== 'OUT_OF_SCOPE' ? (
+            <InfoRow label="Scope">
+              {card.scope.approved && card.scope.status !== 'IN_SCOPE'
+                ? 'Started anyway'
+                : card.scope.status === 'IN_SCOPE'
+                  ? 'In scope'
+                  : card.scope.status === 'OUT_OF_SCOPE'
+                    ? 'Out of scope'
+                    : card.scope.status === 'UNSURE'
+                      ? 'Unsure'
+                      : 'Not checked'}
+              {card.scope.kind ? ` · ${SCOPE_KIND_LABEL[card.scope.kind]}` : ''}
+            </InfoRow>
+          ) : null}
           {card.branchName ? (
             <InfoRow label="Branch">
               <span className="font-mono text-xs">{card.branchName}</span>
