@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { qk } from '~/lib/query-keys';
 import { cardsApi } from '~/services/api/cards';
 import { CARD_STATUSES, type CardStatus } from '~/schemas/common';
-import type { ClientCommentInput, CommitInput, CreateRunInput, PullRequestInput } from '~/schemas/card';
+import type { ClientCommentInput, CommitInput, CreateRunInput, OutOfScopeInput, PullRequestInput, ScopeCheckInput } from '~/schemas/card';
 import type { BoardDto, CardDto } from '~/types/card';
 
 /** Looks a card up in the board cache. */
@@ -167,5 +167,24 @@ export const useOpenPr = (projectId: string, cardId: string) => {
     mutationFn: (body: PullRequestInput) => cardsApi.openPr(cardId, body),
     meta: { silent: true },
     onSettled: () => refreshCard(qc, projectId, cardId),
+  });
+};
+
+/** Check the scope now (again); `start` begins the work once Claude says it's in scope. */
+export const useCheckScope = (projectId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { cardId: string } & ScopeCheckInput) => cardsApi.checkScope(v.cardId, { start: v.start }),
+    onSettled: (_d, _e, v) => refreshCard(qc, projectId, v.cardId, { git: false }),
+  });
+};
+
+/** New → Out of scope, optionally posting a note for the client on Trello. */
+export const useOutOfScope = (projectId: string, cardId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: OutOfScopeInput) => cardsApi.outOfScope(cardId, body),
+    meta: { silent: true },
+    onSettled: () => refreshCard(qc, projectId, cardId, { git: false }),
   });
 };

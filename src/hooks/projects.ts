@@ -11,14 +11,15 @@ export const useProjects = () => useQuery({ queryKey: qk.projects.list(), queryF
 
 const hasActiveRun = (board: BoardDto | undefined) =>
   Boolean(board && Object.values(board.columns).some((cards) => cards.some((c) => c.activeRun)));
+const hasScopeCheck = (board: BoardDto | undefined) => Boolean(board && Object.values(board.columns).some((cards) => cards.some((c) => c.scope.status === 'CHECKING')));
 
-/** The board. Polls every 1.5 s while a run is queued or running, so cards move on their own. */
+/** The board. Polls while a run is queued or running (1.5 s) or a scope check is pending (3 s), so cards update on their own. */
 export const useBoard = (projectId: string) =>
   useQuery({
     queryKey: qk.projects.board(projectId),
     queryFn: () => projectsApi.board(projectId),
     enabled: Boolean(projectId),
-    refetchInterval: (query) => (hasActiveRun(query.state.data) ? 1500 : false),
+    refetchInterval: (query) => (hasActiveRun(query.state.data) ? 1500 : hasScopeCheck(query.state.data) ? 3000 : false),
   });
 
 /** The repository folder vs origin. The server fetches at most once a minute. */

@@ -7,6 +7,8 @@ import { validateRepo } from '~/server/modules/git/repo';
 import { removeWorktree } from '~/server/modules/git/worktree';
 import { sharedWorktreePath } from '~/server/modules/git/shared-checkout';
 import type { ProjectInput } from '~/schemas/project';
+import { DEFAULT_SCOPE_RULES } from '~/lib/scope';
+import { scopeService } from '~/server/modules/scope/scope.service';
 
 /**
  * Reads the board and the source list from Trello, so names stored locally
@@ -23,6 +25,7 @@ async function resolveTrelloTarget(input: ProjectInput) {
     trelloReviewListId: input.trelloReviewListId,
     trelloDoneListId: input.trelloDoneListId,
     trelloNeedsInfoListId: input.trelloNeedsInfoListId,
+    trelloOutOfScopeListId: input.trelloOutOfScopeListId,
   };
   for (const [field, id] of Object.entries(writeBack)) {
     if (id && !lists.some((l) => l.id === id)) throw unprocessable('That list is not an open list of the selected board.', { field });
@@ -73,6 +76,12 @@ async function resolveRepo(input: ProjectInput) {
   return { repoPath: repo.repoPath, baseBranch: input.baseBranch, setupCommand, extraInstructions, ...mode };
 }
 
+/** The scope check settings. Rules equal to the default are stored as null, so they follow future defaults. */
+function scopeFields(input: ProjectInput) {
+  const rules = input.scopeRules.trim();
+  return { scopeCheck: input.scopeCheck, scopeRules: rules && rules !== DEFAULT_SCOPE_RULES.trim() ? rules : null };
+}
+
 /** Changing how cards are worked on mid-card would strand their work: finish or discard open cards first. */
 type ModeFields = { workMode: string; sharedBranch: string | null; sharedInRepo: boolean; baseBranch: string };
 
@@ -110,7 +119,7 @@ export const projectsService = {
   async create(input: ProjectInput) {
     const [trello, repo] = await Promise.all([resolveTrelloTarget(input), resolveRepo(input)]);
     const row = await prisma.project.create({
-      data: { name: input.name, ...trello, ...repo },
+      data: { name: input.name, ...trello, ...repo, ...scopeFields(input) },
       include: projectInclude,
     });
     return presentProject(row);
@@ -125,11 +134,18 @@ export const projectsService = {
     if (!current) throw notFound('Project');
     const [trello, repo] = await Promise.all([resolveTrelloTarget(input), resolveRepo(input)]);
     await assertModeChangeAllowed(projectId, current, repo);
+    const scope = scopeFields(input);
     const row = await prisma.project.update({
       where: { id: projectId },
-      data: { name: input.name, ...trello, ...repo },
+      data: { name: input.name, ...trello, ...repo, ...scope },
       include: projectInclude,
     });
+    // Turned on: check the new cards. New rules: check them again. Turned off: drop pending checks.
+    if (scope.scopeCheck && (!current.scopeCheck || current.scopeRules !== scope.scopeRules)) {
+      await scopeService.queueProject(projectId, { all: current.scopeCheck });
+    } else if (!scope.scopeCheck && current.scopeCheck) {
+      await scopeService.cancelProject(projectId);
+    }
     return presentProject(row);
   },
 

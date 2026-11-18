@@ -44,7 +44,7 @@ export type ClaudeUsageStateDto = {
   usage: ClaudeUsageDto | null;
 };
 
-export type NotificationKind = 'RUN_SUCCEEDED' | 'RUN_FAILED' | 'QUESTIONS' | 'CLIENT_REPLIED' | 'PAUSED';
+export type NotificationKind = 'RUN_SUCCEEDED' | 'RUN_FAILED' | 'QUESTIONS' | 'CLIENT_REPLIED' | 'PAUSED' | 'OUT_OF_SCOPE';
 
 /** `GET /api/notifications?after=`: things worth telling the developer about. */
 export type NotificationDto = {

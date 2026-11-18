@@ -8,6 +8,7 @@ import type { SyncTrigger } from '~/schemas/common';
 import type { SyncResultDto } from '~/types/project';
 import { postedIdsOf } from '~/server/modules/trello/write-back.service';
 import type { TrelloComment } from '~/server/modules/trello/trello.schemas';
+import { scopeService } from '~/server/modules/scope/scope.service';
 import { contentFromTrello, groupChecklistsByCard, planCommentFlags, planSync, refreshCard } from './sync.plan';
 
 const POSITION_STEP = 1000;
@@ -103,8 +104,15 @@ async function runSync(projectId: string, trigger: SyncTrigger): Promise<SyncRes
     let updated = plan.restore.length;
     const refreshes = plan.refresh.map(({ local: card, remote: trelloCard }) => {
       const { changed, data } = refreshCard(card, trelloCard, checklists.get(trelloCard.id) ?? []);
-      if (changed) updated++;
-      return prisma.card.update({ where: { id: card.id }, data });
+      // Set aside as out of scope, then moved back to the source list on Trello: the client agreed to the new work.
+      const backInScope =
+        card.status === 'OUT_OF_SCOPE' && trelloCard.idList === project.trelloSourceListId && card.trelloListId !== trelloCard.idList;
+      if (changed || backInScope) updated++;
+      if (backInScope) position += POSITION_STEP;
+      return prisma.card.update({
+        where: { id: card.id },
+        data: backInScope ? { ...data, status: 'NEW', position, scopeApproved: true, changedOnTrello: false } : data,
+      });
     });
     const restores = plan.restore.map((card) =>
       prisma.card.update({ where: { id: card.id }, data: { removedFromTrello: false } }),
@@ -133,6 +141,8 @@ async function runSync(projectId: string, trigger: SyncTrigger): Promise<SyncRes
     });
 
     if (result.added || result.updated || result.removed) logger.info({ projectId, trigger, ...result }, 'Trello sync');
+    // New cards (and ones edited since their verdict) get a scope check, in the background.
+    if (project.scopeCheck) void scopeService.queueProject(projectId).catch((error: unknown) => logger.warn({ err: error, projectId }, 'Queueing scope checks failed'));
     return { ...result, lastSyncedAt: now.toISOString() };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Sync failed';

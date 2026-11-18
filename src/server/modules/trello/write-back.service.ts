@@ -26,15 +26,21 @@ type ListMapping = {
   trelloReviewListId: string | null;
   trelloDoneListId: string | null;
   trelloNeedsInfoListId: string | null;
+  trelloOutOfScopeListId: string | null;
 };
 
 /** The Trello list a card belongs in for its status (null: leave it where it is). */
 export function targetList(card: { status: string; waitingSince: Date | null }, project: ListMapping): string | null {
-  const anyMapping = project.trelloInProgressListId || project.trelloReviewListId || project.trelloDoneListId || project.trelloNeedsInfoListId;
+  const anyMapping =
+    project.trelloInProgressListId ||
+    project.trelloReviewListId ||
+    project.trelloDoneListId ||
+    project.trelloNeedsInfoListId ||
+    project.trelloOutOfScopeListId;
   if (!anyMapping) return null;
   switch (card.status) {
     case 'NEW':
-      // Discarded: back where the client put it.
+      // Discarded, or back in scope: back where the client put it.
       return project.trelloSourceListId;
     case 'IN_PROGRESS':
       return project.trelloInProgressListId;
@@ -42,6 +48,8 @@ export function targetList(card: { status: string; waitingSince: Date | null }, 
       return card.waitingSince && project.trelloNeedsInfoListId ? project.trelloNeedsInfoListId : project.trelloReviewListId;
     case 'DONE':
       return project.trelloDoneListId;
+    case 'OUT_OF_SCOPE':
+      return project.trelloOutOfScopeListId;
     default:
       return null;
   }

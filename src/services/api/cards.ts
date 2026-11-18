@@ -1,4 +1,12 @@
-import type { ClientCommentInput, CommitInput, CreateRunInput, MoveCardInput, PullRequestInput } from '~/schemas/card';
+import type {
+  ClientCommentInput,
+  CommitInput,
+  CreateRunInput,
+  MoveCardInput,
+  OutOfScopeInput,
+  PullRequestInput,
+  ScopeCheckInput,
+} from '~/schemas/card';
 import type { TrelloUpdatesDto } from '~/types/client-loop';
 import type { CardDto } from '~/types/card';
 import type { ChangesDto, GitStatusDto } from '~/types/git';
@@ -23,6 +31,8 @@ export const cardsApi = {
   trelloUpdates: (cardId: string) => api.get<TrelloUpdatesDto>(`/cards/${cardId}/trello-updates`),
   dismissTrelloUpdates: (cardId: string) => api.post<CardDto>(`/cards/${cardId}/trello-updates/dismiss`),
   clientComment: (cardId: string, body: ClientCommentInput) => api.post<CardDto>(`/cards/${cardId}/client-comment`, body),
+  checkScope: (cardId: string, body: ScopeCheckInput) => api.post<CardDto>(`/cards/${cardId}/scope`, body),
+  outOfScope: (cardId: string, body: OutOfScopeInput) => api.post<CardDto>(`/cards/${cardId}/out-of-scope`, body),
   openPr: (cardId: string, body: PullRequestInput) =>
     api.post<{ prUrl: string | null; compareUrl: string | null }>(`/cards/${cardId}/pr`, body),
 };

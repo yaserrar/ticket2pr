@@ -7,7 +7,7 @@ import type { NotificationDto, NotificationsDto } from '~/types/client-loop';
 /**
  * What the developer should hear about while the app is open (desktop
  * notifications): finished or failed runs, questions for the client, client
- * replies, and the usage-limit pause.
+ * replies, cards Claude thinks are out of scope, and the usage-limit pause.
  */
 export const notificationsService = {
   async feed(after: Date | null): Promise<NotificationsDto> {
@@ -15,7 +15,7 @@ export const notificationsService = {
     const activeRuns = await prisma.run.count({ where: { status: { in: ['QUEUED', 'RUNNING'] } } });
     if (!after) return { now: now.toISOString(), activeRuns, events: [] };
 
-    const [runs, replies, usage] = await Promise.all([
+    const [runs, replies, scoped, usage] = await Promise.all([
       prisma.run.findMany({
         where: { endedAt: { gt: after, lte: now }, status: { in: ['SUCCEEDED', 'FAILED'] } },
         orderBy: { endedAt: 'asc' },
@@ -32,6 +32,11 @@ export const notificationsService = {
         where: { clientRepliedAt: { gt: after, lte: now } },
         take: 20,
         select: { id: true, title: true, projectId: true, clientRepliedAt: true, project: { select: { name: true } } },
+      }),
+      prisma.card.findMany({
+        where: { scopeCheckedAt: { gt: after, lte: now }, scopeStatus: { in: ['OUT_OF_SCOPE', 'UNSURE'] }, status: 'NEW' },
+        take: 20,
+        select: { id: true, title: true, projectId: true, scopeStatus: true, scopeReason: true, scopeCheckedAt: true },
       }),
       usageService.state(),
     ]);
@@ -62,6 +67,17 @@ export const notificationsService = {
         projectId: card.projectId,
         cardId: card.id,
         at: (card.clientRepliedAt ?? now).toISOString(),
+      });
+    }
+    for (const card of scoped) {
+      events.push({
+        id: `scope-${card.id}-${card.scopeCheckedAt?.getTime()}`,
+        kind: 'OUT_OF_SCOPE',
+        title: `${card.scopeStatus === 'UNSURE' ? 'In scope? Claude isn’t sure' : 'Out of scope'}: ${card.title}`,
+        body: card.scopeReason ?? 'Decide before starting it.',
+        projectId: card.projectId,
+        cardId: card.id,
+        at: (card.scopeCheckedAt ?? now).toISOString(),
       });
     }
     if (paused && usage.pausedUntil) {

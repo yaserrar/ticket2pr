@@ -1,7 +1,7 @@
 import 'server-only';
 import { prisma } from '~/server/config/prisma';
 import { HttpError, invalidTransition, notFound } from '~/server/http/errors';
-import { cardChecklistsSchema, cardLabelsSchema, type CreateRunInput, type MoveCardInput } from '~/schemas/card';
+import { cardChecklistsSchema, cardLabelsSchema, type CreateRunInput, type MoveCardInput, type OutOfScopeInput } from '~/schemas/card';
 import { cardStatusSchema, type CardStatus } from '~/schemas/common';
 import { isActiveRunStatus, planMove } from '~/lib/workflow';
 import { cardsService } from '~/server/modules/cards/cards.service';
@@ -18,6 +18,9 @@ import { claudeStatus } from '~/server/modules/claude/claude.client';
 import { runsService } from '~/server/modules/runs/runs.service';
 import { writeBackService } from '~/server/modules/trello/write-back.service';
 import { removeAttachments } from '~/server/modules/trello/card-context.service';
+import { scopeGate, scopeStatusSchema } from '~/lib/scope';
+import { scopeService } from '~/server/modules/scope/scope.service';
+import { scopeContentKey } from '~/server/modules/scope/scope-content';
 
 /**
  * The card state machine (spec §9). Every status change goes through here:
@@ -72,6 +75,18 @@ async function assertRunnerReady() {
   if (!status.ok) throw new HttpError(409, status.error ?? 'Claude Code is not ready.', 'CLAUDE_NOT_READY');
 }
 
+/** The scope gate for starting this card (same rules as the board). */
+function gateOf(card: LoadedCard) {
+  return scopeGate({
+    enabled: card.project.scopeCheck,
+    status: scopeStatusSchema.nullable().catch(null).parse(card.scopeStatus),
+    stale: Boolean(card.scopeContentKey) && card.scopeContentKey !== scopeContentKey(card),
+    approved: card.scopeApproved,
+    reason: card.scopeReason,
+    error: card.scopeError,
+  });
+}
+
 function initialPrompt(card: LoadedCard, branchName: string) {
   return buildInitialPrompt({
     card: {
@@ -109,8 +124,28 @@ export const workflowService = {
       case 'reorder':
         await prisma.card.update({ where: { id: cardId }, data: { position: input.position } });
         break;
-      case 'start':
+      case 'start': {
+        const gate = gateOf(card);
+        if (gate.kind === 'check' || gate.kind === 'wait') {
+          // Stays in New: starts on its own if Claude says it's in scope.
+          await scopeService.request(card.id, { start: true });
+          break;
+        }
+        if (gate.kind === 'confirm') {
+          if (!input.confirmed) throw confirmationRequired(gate.message);
+          await prisma.card.update({ where: { id: cardId }, data: { scopeApproved: true } });
+        }
         await this.startWork(card, input.position);
+        break;
+      }
+      case 'out-of-scope':
+        throw invalidTransition('Use “Out of scope” in the card panel, to choose what the client is told.');
+      case 'back-in-scope':
+        await prisma.card.update({
+          where: { id: cardId },
+          data: { status: 'NEW', position: input.position, scopeApproved: true, startWhenInScope: false, changedOnTrello: false },
+        });
+        writeBackService.follow(cardId);
         break;
       case 'discard':
         if (plan.confirm && !input.confirmed) throw confirmationRequired(plan.confirm);
@@ -178,6 +213,36 @@ export const workflowService = {
     ]);
     writeBackService.follow(card.id);
     void kickQueue();
+  },
+
+  /** The scope check said "in scope" for a card dragged to In progress before its verdict. */
+  async startAfterScopeCheck(cardId: string) {
+    const card = await loadCard(cardId);
+    if (card.status !== 'NEW' || !card.project.repoPath) return;
+    await this.startWork(card, await endOfColumn(card.projectId, 'IN_PROGRESS'));
+  },
+
+  /**
+   * New → Out of scope: the card waits for a new agreement with the client.
+   * The note (if any) is posted on Trello first, so a failure changes nothing.
+   * The card moves to the project's out-of-scope list on Trello, if one is set.
+   */
+  async setOutOfScope(cardId: string, input: OutOfScopeInput) {
+    const card = await loadCard(cardId);
+    if (card.status !== 'NEW') throw invalidTransition('Only new cards are set aside as out of scope.');
+    if (input.note) await writeBackService.comment(cardId, input.note);
+    await prisma.card.update({
+      where: { id: cardId },
+      data: {
+        status: 'OUT_OF_SCOPE',
+        position: await endOfColumn(card.projectId, 'OUT_OF_SCOPE'),
+        startWhenInScope: false,
+        scopeApproved: false,
+        ...(input.note ? { scopeNotePostedAt: new Date() } : {}),
+      },
+    });
+    writeBackService.follow(cardId);
+    return cardsService.get(cardId);
   },
 
   /**

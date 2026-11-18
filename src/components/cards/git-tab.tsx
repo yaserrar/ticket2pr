@@ -47,7 +47,7 @@ export function GitTab({ card }: { card: CardDto }) {
                 : 'Drag the card to In progress to start work on it.'
           }
         />
-        {card.status !== 'NEW' && card.status !== 'DONE' ? <DiscardSection card={card} /> : null}
+        {card.status === 'IN_PROGRESS' || card.status === 'REVIEW' ? <DiscardSection card={card} /> : null}
       </div>
     );
   }
@@ -81,7 +81,7 @@ export function GitTab({ card }: { card: CardDto }) {
       <PushSection card={card} git={git} busy={busy} />
       {shared ? <ReleaseSection git={git} /> : <PullRequestSection card={card} git={git} busy={busy} />}
       {card.status === 'DONE' && !shared ? <CleanupSection card={card} /> : null}
-      {card.status !== 'NEW' && card.status !== 'DONE' ? <DiscardSection card={card} git={git} /> : null}
+      {card.status === 'IN_PROGRESS' || card.status === 'REVIEW' ? <DiscardSection card={card} git={git} /> : null}
     </div>
   );
 }

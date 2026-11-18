@@ -7,6 +7,7 @@ const TONE_DOT = {
   brand: 'bg-brand shadow-[0_0_10px_0] shadow-brand/60',
   warning: 'bg-warning',
   success: 'bg-success',
+  danger: 'bg-danger',
 } as const;
 
 export function StatusDot({ status, className }: { status: CardStatus; className?: string }) {
