@@ -5,7 +5,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { gitTry } from '~/server/modules/git/git.client';
 import { followUpTextFromPrompt } from '../prompt';
 import { UsageLimitError } from '~/server/modules/claude/usage.service';
-import { CLIENT_UPDATE_HEADING, QUESTIONS_HEADING } from '~/lib/summary';
+import { CLIENT_UPDATE_HEADING, PREVIEW_HEADING, QUESTIONS_HEADING } from '~/lib/summary';
 import type { Runner } from './types';
 
 /**
@@ -16,7 +16,10 @@ import type { Runner } from './types';
  */
 export const FAKE_FILE = 'TICKET2PR_FAKE_RUN.md';
 const STEP_MS = Number(process.env.FAKE_RUNNER_STEP_MS ?? 900);
-/** Test switches in a card description: `[fake:limit]` hits the usage limit once, `[fake:questions]` asks the client. */
+/**
+ * Test switches in a card description: `[fake:limit]` hits the usage limit once, `[fake:questions]` asks the client,
+ * `[fake:ui /contact /menu]` names pages for screenshots (`[fake:ui]` alone: the home page).
+ */
 const LIMIT_RESET_SEC = Number(process.env.FAKE_LIMIT_RESET_SEC ?? 45);
 
 /** The Trello part of the prompt (comments, attachments, client updates), to show it arrived. */
@@ -127,9 +130,12 @@ export const fakeRunner: Runner = async (ctx) => {
 
   await tool('Bash', { command: 'git status --short' }, async () => (await gitTry(worktreePath, ['status', '--short'])) || '(clean)');
 
-  const summary = followUp
+  // `[fake:ui /contact]`: name pages to preview, so screenshots can be tried without tokens.
+  const pages = card.description.match(/\[fake:ui((?:\s+\/\S*)*)\]/);
+  const preview = pages ? `\n\n## ${PREVIEW_HEADING}\n${(pages[1]?.trim().split(/\s+/).filter(Boolean) ?? []).concat(pages[1]?.trim() ? [] : ['/']).map((p) => `- ${p}`).join('\n')}` : '';
+  const summary = (followUp
     ? `Simulated follow-up: added a "Follow-up" section to ${FAKE_FILE} with the reviewer's request.\n\nFiles touched: ${FAKE_FILE}\n\nReviewer: check the diff, then commit and push.\n\n## ${CLIENT_UPDATE_HEADING}\nI made the changes you asked for on “${card.title}”.`
-    : `Simulated run: created ${FAKE_FILE} describing the request. No application code was changed.\n\nFiles touched: ${FAKE_FILE}\n\nReviewer: check the diff, then try commit, push and open the pull request.\n\n## ${CLIENT_UPDATE_HEADING}\n“${card.title}” is done and ready for you to check.`;
+    : `Simulated run: created ${FAKE_FILE} describing the request. No application code was changed.\n\nFiles touched: ${FAKE_FILE}\n\nReviewer: check the diff, then try commit, push and open the pull request.\n\n## ${CLIENT_UPDATE_HEADING}\n“${card.title}” is done and ready for you to check.`) + preview;
   turns++;
   await emit({ type: 'assistant_text', text: summary });
   return { summary, numTurns: turns, costUsd: 0, sessionId, isError: false };

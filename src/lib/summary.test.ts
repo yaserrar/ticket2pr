@@ -20,13 +20,21 @@ describe('splitSummary', () => {
   });
 
   it('keeps a plain summary as is', () => {
-    expect(splitSummary('Done.\n\nFiles: a.ts')).toEqual({ summary: 'Done.\n\nFiles: a.ts', clientUpdate: null, questions: null });
-    expect(splitSummary(null)).toEqual({ summary: '', clientUpdate: null, questions: null });
+    expect(splitSummary('Done.\n\nFiles: a.ts')).toEqual({ summary: 'Done.\n\nFiles: a.ts', clientUpdate: null, questions: null, previewPages: [] });
+    expect(splitSummary(null)).toEqual({ summary: '', clientUpdate: null, questions: null, previewPages: [] });
   });
 
   it('ignores empty sections and other headings', () => {
     const out = splitSummary('## What I changed\nThe link.\n\n## Client update\n\n');
     expect(out.summary).toBe('## What I changed\nThe link.');
     expect(out.clientUpdate).toBeNull();
+  });
+
+  it('reads the pages to preview: paths only, three at most', () => {
+    const out = splitSummary(
+      ['Done.', '', '## Client update', 'The footer shows the new number.', '', '## Pages to preview', '- `/`', '- /contact (footer)', '- https://evil.example/x', '- //cdn', '- /a', '- /b'].join('\n'),
+    );
+    expect(out.clientUpdate).toBe('The footer shows the new number.');
+    expect(out.previewPages).toEqual(['/', '/contact', '/a']);
   });
 });

@@ -1,5 +1,5 @@
 import type { Checklist, CardLabel } from '~/types/card';
-import { CLIENT_UPDATE_HEADING, QUESTIONS_HEADING } from '~/lib/summary';
+import { CLIENT_UPDATE_HEADING, PREVIEW_HEADING, QUESTIONS_HEADING } from '~/lib/summary';
 
 /**
  * Card → agent prompt (spec §7.1). The card is written by a client, so it is
@@ -19,7 +19,18 @@ export function fence(text: string) {
   return text.replace(/"""/g, '“““').trim();
 }
 
-export function buildInitialPrompt(input: { card: PromptCard; branchName: string; baseBranch: string; extraInstructions?: string | null }) {
+/** Screenshots on: Claude names the public pages that show its change. */
+const previewRule = () => `- If your change is visible in the app, end with a "## ${PREVIEW_HEADING}" section: up to three
+  URL paths (like /contact) of pages that show it and open without logging in. Leave the
+  section out when nothing visible changed or every such page needs a login.`;
+
+export function buildInitialPrompt(input: {
+  card: PromptCard;
+  branchName: string;
+  baseBranch: string;
+  extraInstructions?: string | null;
+  previewPages?: boolean;
+}) {
   const { card } = input;
   const labels = card.labels.map((l) => l.name || l.color || 'label').join(', ') || 'none';
   const checklist =
@@ -44,7 +55,7 @@ on branch ${input.branchName}${input.branchName === input.baseBranch ? '' : ` (b
   and what to check. Then add a "## ${CLIENT_UPDATE_HEADING}" section: one to three plain
   sentences for the non-technical client about what changed for them (no code,
   no file names).
-
+${input.previewPages ? `${previewRule()}\n` : ''}
 ## Project instructions
 ${input.extraInstructions?.trim() || '(none)'}
 
@@ -61,13 +72,13 @@ ${checklist}
 }
 
 /** Follow-up runs resume the previous session with a short prompt (spec §7.1). */
-export function buildFollowUpPrompt(text: string) {
+export function buildFollowUpPrompt(text: string, { previewPages = false } = {}) {
   return `The reviewer asked for these changes:
 """
 ${fence(text)}
 """
 Apply them, then summarize again with the same sections ("## ${CLIENT_UPDATE_HEADING}", and
-"## ${QUESTIONS_HEADING}" if something is unclear).`;
+"## ${QUESTIONS_HEADING}" if something is unclear${previewPages ? `, and "## ${PREVIEW_HEADING}" if the change is visible` : ''}).`;
 }
 
 /** The reviewer's text back from a follow-up prompt (used by the fake runner). */

@@ -166,6 +166,31 @@ export function createTrelloClient(credentials: TrelloCredentials, baseUrl = env
     addComment: (cardId: string, text: string) =>
       request('POST', `/cards/${cardId}/actions/comments`, z.object({ id: z.string() }), { text }),
 
+    /** Uploads a file to the card (screenshots for the client). Returns its id and Trello URL. */
+    async attachFile(cardId: string, file: { name: string; mimeType: string; data: Buffer }) {
+      const form = new FormData();
+      form.set('name', file.name);
+      form.set('mimeType', file.mimeType);
+      form.set('setCover', 'false');
+      form.set('file', new Blob([new Uint8Array(file.data)], { type: file.mimeType }), file.name);
+      let res: Response;
+      try {
+        res = await fetch(urlFor(`/cards/${cardId}/attachments`), {
+          method: 'POST',
+          headers: { Accept: 'application/json', Authorization: authorization },
+          body: form,
+          signal: AbortSignal.timeout(60_000),
+          cache: 'no-store',
+        });
+      } catch {
+        throw new TrelloError(502, `Could not upload “${file.name}” to Trello.`, 'TRELLO_UNAVAILABLE');
+      }
+      if (!res.ok) throw toTrelloError(res.status, await res.text().catch(() => ''));
+      const parsed = z.object({ id: z.string(), url: z.string() }).safeParse(await res.json().catch(() => null));
+      if (!parsed.success) throw new TrelloError(502, 'Trello returned data in an unexpected format.', 'TRELLO_UNAVAILABLE');
+      return parsed.data;
+    },
+
     /**
      * Downloads an uploaded attachment (Trello requires the credentials for
      * it). Refuses files over `maxBytes`.

@@ -18,6 +18,9 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const READABLE = /^(image\/(png|jpe?g|gif|webp)|application\/pdf|text\/.+|application\/json)$/i;
 const READABLE_EXT = /\.(png|jpe?g|gif|webp|pdf|txt|md|csv|json|log|html|css)$/i;
 
+/** Files Ticket2PR uploads to a card start with this. */
+export const OWN_UPLOAD_PREFIX = 'ticket2pr-';
+
 export function attachmentsDir(cardId: string) {
   return path.join(path.dirname(worktreesRoot()), 'attachments', cardId);
 }
@@ -71,6 +74,8 @@ export const cardContextService = {
     ctx.comments = comments.map((c) => ({ id: c.id, author: authorOf(c), text: c.data.text, date: c.date }));
 
     const fresh = attachments
+      // Screenshots Ticket2PR uploaded for the client are ours, not the client's.
+      .filter((a) => !a.name.startsWith(OWN_UPLOAD_PREFIX))
       .filter((a) => !since || new Date(a.date) > since)
       .sort((a, b) => a.date.localeCompare(b.date));
     const dir = attachmentsDir(card.id);
