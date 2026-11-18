@@ -55,6 +55,10 @@ model Project {
   scopeCheck             Boolean   @default(false) // Claude sorts new cards into in scope / out of scope
   scopeRules             String? // what the maintenance agreement covers (null = the default rules)
   trelloOutOfScopeListId String? // write-back: where out-of-scope cards wait on Trello
+  riskPaths              String? // extra sensitive paths for the risk flag, one glob per line
+  previewEnabled         Boolean   @default(false) // screenshots of UI changes for the client
+  previewCommand         String? // starts the app in the card's folder, e.g. "npm run dev -- --port $PORT"
+  previewUrl             String? // where it answers, e.g. "http://localhost:$PORT"
   lastSyncedAt           DateTime?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
@@ -107,6 +111,14 @@ model Card {
   scopeApproved        Boolean   @default(false) // the developer started it anyway, or the client agreed to the new work
   startWhenInScope     Boolean   @default(false) // dragged to In progress before the check finished
   scopeNotePostedAt    DateTime?
+  // Risk flag: how carefully the changes must be reviewed (from the diff).
+  riskLevel            String? // LOW | MEDIUM | HIGH
+  riskJson             String? // { areas: [{ key, label, level, files }], stats }
+  riskReviewedAt       DateTime? // "I reviewed the high-risk files", before push / pull request
+  // Screenshots of UI changes, for the client update.
+  previewPagesJson     String? // pages Claude said show the change: ["/contact"]
+  screenshotsJson      String? // [{ file, page, takenAt }]
+  screenshotError      String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   runs                 Run[]

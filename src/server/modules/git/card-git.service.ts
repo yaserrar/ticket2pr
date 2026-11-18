@@ -5,7 +5,10 @@ import { settingsService } from '~/server/modules/settings/settings.service';
 import { openPullRequest } from '~/server/modules/github/github.client';
 import { workflowService } from '~/server/modules/workflow/workflow.service';
 import type { ChangesDto, GitStatusDto } from '~/types/git';
-import type { CommitInput, PullRequestInput } from '~/schemas/card';
+import type { CommitInput, OpenPrInput, PushInput } from '~/schemas/card';
+import { riskMarkdown } from '~/lib/risk';
+import { riskService } from '~/server/modules/risk/risk.service';
+import { addLabels } from '~/server/modules/github/github.client';
 import { commitAll, getBranchStatus, getChanges, pushBranch, resetChanges } from './changes';
 import { gitTry, originGithub } from './git.client';
 import { compareUrl } from './remote';
@@ -94,7 +97,10 @@ async function latestSummary(cardId: string) {
 export const cardGitService = {
   async changes(cardId: string): Promise<ChangesDto> {
     const card = await loadWorkingCard(cardId);
-    return getChanges(card.worktreePath, card.project.baseBranch, card.startSha);
+    const changes = await getChanges(card.worktreePath, card.project.baseBranch, card.startSha);
+    // The badge follows the diff (manual edits, follow-up runs).
+    await riskService.store(card, changes.files);
+    return changes;
   },
 
   async status(cardId: string): Promise<GitStatusDto> {
@@ -113,11 +119,15 @@ export const cardGitService = {
       .filter(Boolean)
       .join('\n\n');
     // spec §8.5: summary, Trello link, "Generated with Claude Code, reviewed by {user}".
+    const risk = riskService.parse(card.riskLevel, card.riskJson);
     const body = [
       summary || '_No summary._',
+      risk ? riskMarkdown(risk) : null,
       `**Trello:** ${card.trelloUrl}`,
       `---\nGenerated with Claude Code via Ticket2PR${reviewer ? `, reviewed by ${reviewer}` : ''}.`,
-    ].join('\n\n');
+    ]
+      .filter(Boolean)
+      .join('\n\n');
 
     const shared = isShared(card);
     const releaseCompareUrl =
@@ -148,8 +158,9 @@ export const cardGitService = {
   },
 
   /** Branch-per-card: pushes the card branch. Shared branch: pushes the branch and the card is Done. */
-  async push(cardId: string) {
+  async push(cardId: string, input: Required<PushInput> = { riskReviewed: false }) {
     const card = await loadWorkingCard(cardId, { idle: true });
+    await riskService.assertReviewed(card, input.riskReviewed);
     const status = await getBranchStatus(card.worktreePath, card.project.baseBranch, card.branchName, card.startSha);
     if (!status.hasRemote) throw new HttpError(409, 'This repository has no origin remote to push to.', 'GIT_ERROR');
     if (status.uncommittedFiles > 0) throw new HttpError(409, 'Commit your changes before pushing.', 'GIT_ERROR');
@@ -203,12 +214,13 @@ export const cardGitService = {
    * With a GitHub token: open the PR through the API, save its link, move the
    * card to Done. Without one: return the compare URL to open in the browser.
    */
-  async openPr(cardId: string, input: Required<PullRequestInput>): Promise<{ prUrl: string | null; compareUrl: string | null }> {
+  async openPr(cardId: string, input: Required<OpenPrInput>): Promise<{ prUrl: string | null; compareUrl: string | null }> {
     const card = await loadWorkingCard(cardId, { idle: true });
     if (isShared(card)) {
       throw new HttpError(409, 'This project works on one shared branch: push it instead of opening a pull request per card.', 'GIT_ERROR');
     }
     if (card.prUrl) return { prUrl: card.prUrl, compareUrl: null };
+    const risk = await riskService.assertReviewed(card, input.riskReviewed);
     const [status, origin, settings] = await Promise.all([
       getBranchStatus(card.worktreePath, card.project.baseBranch, card.branchName),
       originGithub(card.worktreePath),
@@ -231,6 +243,8 @@ export const cardGitService = {
       title: input.title,
       body: input.body,
     });
+    // Best effort: the label helps whoever merges; the PR is open either way.
+    if (risk?.level === 'HIGH') await addLabels(settings.githubToken, github.owner, github.repo, prUrl, ['high-risk']).catch(() => undefined);
     await workflowService.markPrOpened(cardId, prUrl);
     return { prUrl, compareUrl: null };
   },

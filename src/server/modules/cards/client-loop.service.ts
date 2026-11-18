@@ -1,7 +1,8 @@
 import 'server-only';
 import { prisma } from '~/server/config/prisma';
-import { notFound } from '~/server/http/errors';
-import { authorOf } from '~/server/modules/trello/card-context.service';
+import { HttpError, notFound } from '~/server/http/errors';
+import { authorOf, OWN_UPLOAD_PREFIX } from '~/server/modules/trello/card-context.service';
+import { cardPreviewService, parseScreenshots } from '~/server/modules/preview/card-preview.service';
 import { trelloService } from '~/server/modules/trello/trello.service';
 import { postedIdsOf, writeBackService } from '~/server/modules/trello/write-back.service';
 import { contentChanges, contentOf, parseContent } from '~/server/modules/runs/trello-context';
@@ -59,8 +60,25 @@ export const clientLoopService = {
    * list when one is set); the reply shows up with the next sync.
    */
   async comment(cardId: string, input: ClientCommentInput) {
-    await loadCard(cardId);
-    await writeBackService.comment(cardId, input.text);
+    const card = await loadCard(cardId);
+    const screenshots = input.kind === 'UPDATE' ? (input.screenshots ?? []) : [];
+    let text = input.text;
+    if (screenshots.length) {
+      // Upload first: if Trello refuses a file, nothing is posted and the developer can retry.
+      const shots = parseScreenshots(card.screenshotsJson);
+      const client = await trelloService.client();
+      const links: string[] = [];
+      for (const file of screenshots) {
+        const shot = shots.find((s) => s.file === file);
+        if (!shot) throw new HttpError(409, 'That screenshot is gone. Retake the screenshots and try again.', 'CONFLICT');
+        const data = await cardPreviewService.image(cardId, file);
+        const name = `${OWN_UPLOAD_PREFIX}preview${shot.page === '/' ? '-home' : shot.page.replace(/[^\w]+/g, '-').replace(/-+$/, '')}.png`;
+        const uploaded = await client.attachFile(card.trelloCardId, { name, mimeType: 'image/png', data });
+        links.push(`- ${shot.page}: ${uploaded.url}`);
+      }
+      text = `${text}\n\n${links.length === 1 ? 'Screenshot' : 'Screenshots'}:\n${links.join('\n')}`;
+    }
+    await writeBackService.comment(cardId, text);
     if (input.kind === 'UPDATE') {
       await prisma.card.update({ where: { id: cardId }, data: { clientUpdatePostedAt: new Date() } });
     } else {

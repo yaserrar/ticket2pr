@@ -1,5 +1,6 @@
 import type { CardStatus } from '~/schemas/common';
 import type { ScopeKind, ScopeSize, ScopeStatus } from '~/lib/scope';
+import type { RiskArea, RiskLevel } from '~/lib/risk';
 import type { ISODate } from './api';
 import type { ProjectDto } from './project';
 import type { RunStatus } from './run';
@@ -29,6 +30,25 @@ export type CardScopeDto = {
   /** Dragged to In progress before the check finished: starts if in scope. */
   startWhenInScope: boolean;
   notePostedAt: ISODate | null;
+};
+
+/** How carefully the changes must be reviewed (from the diff). */
+export type CardRiskDto = {
+  level: RiskLevel;
+  areas: RiskArea[];
+  stats: { files: number; lines: number };
+  /** "I reviewed the high-risk files" was confirmed for these changes. */
+  reviewedAt: ISODate | null;
+};
+
+export type CardScreenshotDto = { file: string; page: string; takenAt: ISODate; url: string };
+
+/** Screenshots of the change (public pages), for the client update. */
+export type CardPreviewDto = {
+  /** Pages Claude said show the change. */
+  pages: string[];
+  screenshots: CardScreenshotDto[];
+  error: string | null;
 };
 
 export type CardDto = {
@@ -63,6 +83,8 @@ export type CardDto = {
   /** The client commented while we were waiting. */
   clientRepliedAt: ISODate | null;
   scope: CardScopeDto;
+  risk: CardRiskDto | null;
+  preview: CardPreviewDto;
   /** The queued or running run, if any. `queuePosition` is 1-based among queued runs. */
   activeRun: { id: string; status: RunStatus; queuePosition: number | null } | null;
   /** The latest run (active or finished). */

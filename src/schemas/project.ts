@@ -47,7 +47,19 @@ export const projectBody = z.object({
   scopeRules: z.string().trim().max(6000, 'Keep it under 6000 characters'),
   /** Write-back: where out-of-scope cards wait on Trello (null = don't move). */
   trelloOutOfScopeListId: trelloIdSchema.nullable(),
-});
+  /** Risk flag: extra sensitive paths, one glob per line (payments, login, migrations… are built in). */
+  riskPaths: z.string().trim().max(4000, 'Keep it under 4000 characters'),
+  /** Screenshots of UI changes for the client update (public pages only). */
+  previewEnabled: z.boolean(),
+  /** Starts the app in the card's folder. `$PORT` is a free port, `$REPO_PATH` the repository folder. */
+  previewCommand: z.string().trim().max(500, 'Keep it under 500 characters'),
+  /** Where the app answers. Empty = http://localhost:$PORT. */
+  previewUrl: z
+    .string()
+    .trim()
+    .max(300)
+    .refine((v) => !v || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(v), 'Use a local address, like http://localhost:$PORT'),
+}).refine((v) => !v.previewEnabled || v.previewCommand.length > 0, { path: ['previewCommand'], message: 'Give the command that starts the app' });
 export type ProjectInput = z.infer<typeof projectBody>;
 
 export const validateRepoBody = z.object({ repoPath: z.string().trim().min(1, 'Type the repository path').max(1000) });

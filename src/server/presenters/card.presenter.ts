@@ -6,6 +6,8 @@ import { cardStatusSchema } from '~/schemas/common';
 import { isActiveRunStatus } from '~/lib/workflow';
 import { scopeKindSchema, scopeSizeSchema, scopeStatusSchema } from '~/lib/scope';
 import { scopeContentKey } from '~/server/modules/scope/scope-content';
+import { riskService } from '~/server/modules/risk/risk.service';
+import { parsePages, parseScreenshots } from '~/server/modules/preview/card-preview.service';
 import type { CardDto } from '~/types/card';
 import type { RunStatus } from '~/types/run';
 
@@ -75,6 +77,15 @@ export function presentCard(
       approved: row.scopeApproved,
       startWhenInScope: row.startWhenInScope,
       notePostedAt: row.scopeNotePostedAt?.toISOString() ?? null,
+    },
+    risk: (() => {
+      const risk = riskService.parse(row.riskLevel, row.riskJson);
+      return risk ? { ...risk, reviewedAt: row.riskReviewedAt?.toISOString() ?? null } : null;
+    })(),
+    preview: {
+      pages: parsePages(row.previewPagesJson),
+      screenshots: parseScreenshots(row.screenshotsJson).map((s) => ({ ...s, url: `/api/cards/${row.id}/screenshots/${s.file}` })),
+      error: row.screenshotError,
     },
     activeRun:
       latest && latestStatus && isActiveRunStatus(latestStatus)

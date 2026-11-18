@@ -70,3 +70,14 @@ export async function openPullRequest(input: {
   }
   throw new HttpError(422, `GitHub refused the pull request. ${githubMessage(json) || res.statusText}`, 'GITHUB_ERROR');
 }
+
+/** Adds labels to a pull request (GitHub creates missing labels). */
+export async function addLabels(token: string, owner: string, repo: string, prUrl: string, labels: string[]) {
+  const number = prUrl.match(/\/pull\/(\d+)/)?.[1];
+  if (!number) return;
+  const { res, json } = await github(token, `/repos/${owner}/${repo}/issues/${number}/labels`, {
+    method: 'POST',
+    body: JSON.stringify({ labels }),
+  });
+  if (!res.ok) throw new HttpError(422, `GitHub refused the labels. ${githubMessage(json) || res.statusText}`, 'GITHUB_ERROR');
+}

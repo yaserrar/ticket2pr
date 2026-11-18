@@ -82,6 +82,16 @@ function scopeFields(input: ProjectInput) {
   return { scopeCheck: input.scopeCheck, scopeRules: rules && rules !== DEFAULT_SCOPE_RULES.trim() ? rules : null };
 }
 
+/** Risk paths and screenshots. Empty texts are stored as null. */
+function reviewFields(input: ProjectInput) {
+  return {
+    riskPaths: input.riskPaths || null,
+    previewEnabled: input.previewEnabled,
+    previewCommand: input.previewCommand || null,
+    previewUrl: input.previewUrl || null,
+  };
+}
+
 /** Changing how cards are worked on mid-card would strand their work: finish or discard open cards first. */
 type ModeFields = { workMode: string; sharedBranch: string | null; sharedInRepo: boolean; baseBranch: string };
 
@@ -119,7 +129,7 @@ export const projectsService = {
   async create(input: ProjectInput) {
     const [trello, repo] = await Promise.all([resolveTrelloTarget(input), resolveRepo(input)]);
     const row = await prisma.project.create({
-      data: { name: input.name, ...trello, ...repo, ...scopeFields(input) },
+      data: { name: input.name, ...trello, ...repo, ...scopeFields(input), ...reviewFields(input) },
       include: projectInclude,
     });
     return presentProject(row);
@@ -137,7 +147,7 @@ export const projectsService = {
     const scope = scopeFields(input);
     const row = await prisma.project.update({
       where: { id: projectId },
-      data: { name: input.name, ...trello, ...repo, ...scope },
+      data: { name: input.name, ...trello, ...repo, ...scope, ...reviewFields(input) },
       include: projectInclude,
     });
     // Turned on: check the new cards. New rules: check them again. Turned off: drop pending checks.

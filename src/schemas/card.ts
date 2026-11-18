@@ -2,6 +2,14 @@ import { z } from 'zod';
 import { cardStatusSchema, idSchema } from './common';
 
 export const cardParams = z.object({ cardId: idSchema });
+/** Screenshot files are named by Ticket2PR: `{run}-{n}.png`. */
+export const screenshotFileSchema = z.string().regex(/^[\w-]+\.png$/, 'Unknown screenshot');
+export const screenshotParams = z.object({ cardId: idSchema, file: screenshotFileSchema });
+
+/** URL paths of public pages, like `/contact`. */
+const pagePathSchema = z.string().trim().regex(/^\/[^\s]*$/, 'Use paths like /contact').refine((p) => !p.startsWith('//'), 'Use paths like /contact');
+export const retakeScreenshotsBody = z.object({ pages: z.array(pagePathSchema).min(1, 'Add a page, like /').max(3, 'Three pages at most') });
+export type RetakeScreenshotsInput = z.infer<typeof retakeScreenshotsBody>;
 export const runParams = z.object({ runId: idSchema });
 
 /** `PATCH /api/cards/{id}/move` (spec §9.5). `confirmed` acknowledges a destructive move. */
@@ -33,12 +41,22 @@ export const pullRequestBody = z.object({
 });
 export type PullRequestInput = z.input<typeof pullRequestBody>;
 
+/** `POST /api/cards/{id}/pr`: the form, plus "I reviewed the high-risk files" (required once when the changes are high risk). */
+export const openPrBody = pullRequestBody.extend({ riskReviewed: z.boolean().default(false) });
+export type OpenPrInput = z.input<typeof openPrBody>;
+
+/** `POST /api/cards/{id}/push`. */
+export const pushBody = z.object({ riskReviewed: z.boolean().default(false) });
+export type PushInput = z.input<typeof pushBody>;
+
 /** Post on the Trello card: the plain-language update, or the questions for the client. */
 export const clientCommentBody = z.object({
   kind: z.enum(['UPDATE', 'QUESTIONS']),
   text: z.string().trim().min(1, 'Write the message').max(5000, 'Keep it under 5000 characters'),
+  /** Screenshots to attach to the card with the update. */
+  screenshots: z.array(screenshotFileSchema).max(3).default([]),
 });
-export type ClientCommentInput = z.infer<typeof clientCommentBody>;
+export type ClientCommentInput = z.input<typeof clientCommentBody>;
 
 /**
  * `POST /api/cards/{id}/out-of-scope`: set a new card aside. `note` is posted on

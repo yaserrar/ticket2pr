@@ -21,7 +21,7 @@ describe('updateSettingsBody', () => {
 });
 
 describe('projectBody', () => {
-  const repo = { repoPath: '', baseBranch: 'main', setupCommand: '', extraInstructions: '', workMode: 'BRANCH_PER_CARD' as const, sharedBranch: '', sharedInRepo: true, trelloInProgressListId: null, trelloReviewListId: null, trelloDoneListId: null, trelloNeedsInfoListId: null, scopeCheck: false, scopeRules: '', trelloOutOfScopeListId: null };
+  const repo = { repoPath: '', baseBranch: 'main', setupCommand: '', extraInstructions: '', workMode: 'BRANCH_PER_CARD' as const, sharedBranch: '', sharedInRepo: true, trelloInProgressListId: null, trelloReviewListId: null, trelloDoneListId: null, trelloNeedsInfoListId: null, scopeCheck: false, scopeRules: '', trelloOutOfScopeListId: null, riskPaths: '', previewEnabled: false, previewCommand: '', previewUrl: '' };
 
   it('explains a missing board before an invalid id', () => {
     const result = projectBody.safeParse({ ...repo, name: 'Site', trelloBoardId: '', trelloSourceListId: '' });
@@ -32,6 +32,15 @@ describe('projectBody', () => {
   it('accepts Trello ids', () => {
     const id = '5abbe4b7ddc1b351ef961414';
     expect(projectBody.parse({ ...repo, name: ' Site ', trelloBoardId: id, trelloSourceListId: id }).name).toBe('Site');
+  });
+
+  it('needs a start command for screenshots, and a local app address', () => {
+    const id = '5abbe4b7ddc1b351ef961414';
+    const base = { ...repo, name: 'Site', trelloBoardId: id, trelloSourceListId: id };
+    const noCommand = projectBody.safeParse({ ...base, previewEnabled: true });
+    expect(noCommand.error?.issues[0]?.path).toEqual(['previewCommand']);
+    expect(projectBody.safeParse({ ...base, previewEnabled: true, previewCommand: 'npm run dev', previewUrl: 'https://example.com' }).success).toBe(false);
+    expect(projectBody.safeParse({ ...base, previewEnabled: true, previewCommand: 'npm run dev', previewUrl: 'http://localhost:$PORT/app' }).success).toBe(true);
   });
 });
 
@@ -49,4 +58,5 @@ describe('describeSync', () => {
     expect(describeSync({ added: 1, updated: 0, removed: 1 })).toBe('1 new card · 1 removed from Trello');
     expect(describeSync({ added: 0, updated: 0, removed: 0 })).toBe('Already up to date');
   });
+
 });

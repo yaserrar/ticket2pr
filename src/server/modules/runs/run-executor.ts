@@ -12,6 +12,9 @@ import { formatTime } from '~/lib/format';
 import type { Card, Run } from '~/generated/prisma/client';
 import type { RunEventPayload, RunKind } from '~/types/run';
 import { buildResumePrompt } from './prompt';
+import { riskService } from '~/server/modules/risk/risk.service';
+import { RISK_META } from '~/lib/risk';
+import { cardPreviewService } from '~/server/modules/preview/card-preview.service';
 import { appendRunEvent, endRunStream } from './run-events';
 import { runRegistry } from './run-registry';
 import { getRunner, runnerName } from './runners';
@@ -94,6 +97,7 @@ export async function executeRun(runId: string, controller: AbortController, onS
     });
     succeeded = !result.isError;
     const sections = splitSummary(result.summary);
+    if (succeeded) await afterChanges({ runId, cardId: card.id, previewPages: sections.previewPages, log, signal: controller.signal });
     await prisma.$transaction([
       prisma.run.update({
         where: { id: runId },
@@ -138,6 +142,28 @@ export async function executeRun(runId: string, controller: AbortController, onS
     if (succeeded) await moveToReview(runId).catch((err) => logger.error({ err, runId }, 'Moving the card to Review failed'));
     await endRunStream(runId);
     onSettled();
+  }
+}
+
+/**
+ * After a successful run, before Review: the risk flag of the changes, then
+ * (screenshots on) the app started on the pages Claude named. Neither can
+ * fail the run: problems are logged and stored on the card.
+ */
+async function afterChanges(input: { runId: string; cardId: string; previewPages: string[]; log: (m: string) => Promise<void>; signal: AbortSignal }) {
+  const card = await prisma.card.findUnique({ where: { id: input.cardId }, include: { project: true } });
+  if (!card) return;
+  try {
+    const risk = await riskService.refresh(card);
+    if (risk) {
+      const areas = risk.areas.map((a) => a.label).join(', ');
+      await input.log(`Risk: ${RISK_META[risk.level].label} · ${RISK_META[risk.level].review.toLowerCase()}${areas ? ` (${areas})` : ''}`);
+    }
+  } catch (error) {
+    logger.warn({ err: error, cardId: card.id }, 'Risk assessment failed');
+  }
+  if (card.project.previewEnabled && card.project.previewCommand?.trim()) {
+    await cardPreviewService.capture({ cardId: card.id, prefix: input.runId, pages: input.previewPages, log: input.log, signal: input.signal });
   }
 }
 

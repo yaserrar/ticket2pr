@@ -26,6 +26,11 @@ export type ProjectDto = {
   /** null: the default rules (DEFAULT_SCOPE_RULES). */
   scopeRules: string | null;
   trelloOutOfScopeListId: string | null;
+  /** Extra sensitive paths for the risk flag, one glob per line. */
+  riskPaths: string | null;
+  previewEnabled: boolean;
+  previewCommand: string | null;
+  previewUrl: string | null;
   lastSyncedAt: ISODate | null;
   /** Error of the latest sync, when it failed. */
   lastSyncError: string | null;

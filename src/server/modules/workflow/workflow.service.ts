@@ -18,6 +18,7 @@ import { claudeStatus } from '~/server/modules/claude/claude.client';
 import { runsService } from '~/server/modules/runs/runs.service';
 import { writeBackService } from '~/server/modules/trello/write-back.service';
 import { removeAttachments } from '~/server/modules/trello/card-context.service';
+import { removeScreenshots } from '~/server/modules/preview/preview.service';
 import { scopeGate, scopeStatusSchema } from '~/lib/scope';
 import { scopeService } from '~/server/modules/scope/scope.service';
 import { scopeContentKey } from '~/server/modules/scope/scope-content';
@@ -99,6 +100,7 @@ function initialPrompt(card: LoadedCard, branchName: string) {
     branchName,
     baseBranch: card.project.baseBranch,
     extraInstructions: card.project.extraInstructions,
+    previewPages: card.project.previewEnabled,
   });
 }
 
@@ -274,7 +276,7 @@ export const workflowService = {
       await prisma.$transaction([
         prisma.card.update({ where: { id: cardId }, data: { status: 'IN_PROGRESS', position, branchName } }),
         prisma.run.create({
-          data: { cardId, kind: 'FOLLOW_UP', runner: runnerName(), prompt: buildFollowUpPrompt(input.followUpText) },
+          data: { cardId, kind: 'FOLLOW_UP', runner: runnerName(), prompt: buildFollowUpPrompt(input.followUpText, { previewPages: card.project.previewEnabled }) },
         }),
       ]);
       writeBackService.follow(cardId);
@@ -324,9 +326,16 @@ export const workflowService = {
         clientUpdatePostedAt: null,
         waitingSince: null,
         clientRepliedAt: null,
+        riskLevel: null,
+        riskJson: null,
+        riskReviewedAt: null,
+        previewPagesJson: null,
+        screenshotsJson: null,
+        screenshotError: null,
       },
     });
     await removeAttachments(cardId);
+    await removeScreenshots(cardId);
     writeBackService.follow(cardId);
     return cardsService.get(cardId);
   },
