@@ -11,7 +11,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # Project rules
 - Design: `docs/spec.md` (the original V1 spec; code comments cite it as `spec §x.y`). The README describes the app as it is today.
 - Layers: `src/server/modules/<feature>/*.service.ts` hold the logic, `src/app/api/**/route.ts` stay thin, presenters turn Prisma rows into DTOs (`src/types/*`), Zod schemas in `src/schemas/*` are shared by forms and routes, `src/services/api/*` → `src/hooks/*` on the client (React Query).
-- UI: Raycast-style, dark only. Colours come from tokens in `src/app/globals.css` only (no hex in components). shadcn components live in `src/components/ui`.
+- UI: Raycast-style, light and dark (next-themes, class on `<html>`, dark by default, toggle in the header). Colours come from tokens in `src/app/globals.css` only (`:root` = light, `.dark` = dark; no hex in components). shadcn components live in `src/components/ui`.
 - Icons: `iconsax-react` only (Bulk variant is the default through `scripts/patch-iconsax.mjs`). Never add lucide-react.
 - Prisma 7 + SQLite (`@prisma/adapter-better-sqlite3`): import from `~/generated/prisma/client`. Enums and JSON are `String` columns validated with Zod.
 - Every API route goes through `route()` (`src/server/http/route.ts`): Zod parsing, loopback-only guard, error mapping. Routes stay thin; logic lives in `src/server/modules/*`.

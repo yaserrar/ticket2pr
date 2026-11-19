@@ -7,6 +7,7 @@ import { LogoMark } from '~/components/brand/logo';
 import { Shortcut } from '~/components/shared/kbd';
 import { Button } from '~/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
+import { ThemeToggle } from './theme-toggle';
 import { useUiStore } from '~/store/ui.store';
 import { ProjectSwitcher } from './project-switcher';
 
@@ -45,6 +46,7 @@ export function AppHeader() {
           </button>
         </div>
 
+        <ThemeToggle />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="icon-sm" asChild>

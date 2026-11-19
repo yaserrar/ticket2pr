@@ -3,13 +3,14 @@
 @import "shadcn/tailwind.css";
 
 /*
- * Ticket2PR design tokens. Direction: Raycast-style, dark only.
+ * Ticket2PR design tokens. Direction: Raycast-style.
  * "A premium Mac app": a near-black canvas built from white-alpha layers,
  * hairline borders, calm two-tone text, keycaps, and one warm red brand light
  * (#ff6363) used sparingly: focus, the logo, the running state, glows.
  *
- * Dark only, like Raycast. EVERY colour used by components comes from this
- * file (no hex in components).
+ * Dark by default, like Raycast, with a light theme (`.dark` on <html>, set by
+ * next-themes). EVERY colour used by components comes from this file (no hex
+ * in components): the two blocks below define the same tokens.
  *
  * Naming (per colour family X):
  *   --X              solid fill / icon / dot
@@ -132,8 +133,77 @@
   }
 }
 
-/* ─── Theme (dark only) ───────────────────────────────────────────────────── */
+/* ─── Themes ──────────────────────────────────────────────────────────────── */
+/* Light: a white canvas built from black-alpha layers, the same structure as dark. */
 :root {
+  color-scheme: light;
+
+  --background: #f3f3f5;
+  --foreground: #18181b;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --primary: #18181b;
+  --primary-foreground: #ffffff;
+  --secondary: #ececee;
+  --secondary-foreground: #18181b;
+  --muted: #efeff1;
+  --muted-foreground: #5c5c63;
+  --subtle-foreground: #75757d;
+  --accent: #ececef;
+  --accent-foreground: #111113;
+  --destructive: #d93a3a;
+  --destructive-foreground: #ffffff;
+  --border: rgb(0 0 0 / 0.09);
+  --border-strong: rgb(0 0 0 / 0.15);
+  --input: rgb(0 0 0 / 0.13);
+  --ring: rgb(238 69 69 / 0.45);
+
+  /* Panels sit above the canvas: white, like dark mode's lighter layers. */
+  --fill-faint: rgb(255 255 255 / 0.8);
+  --fill: rgb(0 0 0 / 0.04);
+  --fill-raised: rgb(0 0 0 / 0.07);
+  --keycap: #ffffff;
+
+  --brand: #ee4545;
+  --brand-hover: #dc3434;
+  --brand-foreground: #ffffff;
+  --brand-subtle: rgb(238 69 69 / 0.1);
+  --brand-muted: #c12a2a;
+  --brand-border: rgb(238 69 69 / 0.35);
+
+  --success: #1f9d63;
+  --success-subtle: rgb(31 157 99 / 0.1);
+  --success-muted: #13774a;
+  --warning: #e0a100;
+  --warning-subtle: rgb(224 161 0 / 0.13);
+  --warning-muted: #855a00;
+  --danger: #e5484d;
+  --danger-foreground: #ffffff;
+  --danger-subtle: rgb(229 72 77 / 0.1);
+  --danger-muted: #bf2a30;
+  --info: #0a8ad6;
+  --info-subtle: rgb(10 138 214 / 0.1);
+  --info-muted: #0a679f;
+
+  --elevation-0: 0 1px 0 0 rgb(0 0 0 / 0.04);
+  --elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.06);
+  --elevation-2: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 8px 20px -6px rgb(0 0 0 / 0.12);
+  --elevation-3: 0 2px 4px 0 rgb(0 0 0 / 0.05), 0 18px 44px -10px rgb(0 0 0 / 0.16);
+  --elevation-4: 0 4px 8px 0 rgb(0 0 0 / 0.05), 0 30px 70px -14px rgb(0 0 0 / 0.22);
+  --key-shadow: 0 0 0 1px rgb(0 0 0 / 0.85), inset 0 1px 0 0 rgb(255 255 255 / 0.14), 0 1px 2px 0 rgb(0 0 0 / 0.2);
+  --keycap-shadow: inset 0 -1px 0 0 rgb(0 0 0 / 0.12), 0 1px 1px 0 rgb(0 0 0 / 0.08);
+  --window-highlight: inset 0 1px 0 0 rgb(255 255 255 / 0.9);
+
+  --grid-line: rgb(0 0 0 / 0.05);
+  --radius: 0.75rem;
+}
+
+/* Dark (default). */
+.dark {
   color-scheme: dark;
 
   --background: #07080a;
@@ -191,6 +261,9 @@
   --elevation-2: 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 8px 20px -6px rgb(0 0 0 / 0.6);
   --elevation-3: 0 2px 4px 0 rgb(0 0 0 / 0.35), 0 18px 44px -10px rgb(0 0 0 / 0.7);
   --elevation-4: 0 4px 8px 0 rgb(0 0 0 / 0.4), 0 30px 70px -14px rgb(0 0 0 / 0.8);
+  --key-shadow: 0 0 0 1px rgb(0 0 0 / 0.55), 0 0 14px 0 rgb(255 255 255 / 0.1), inset 0 1px 0 0 rgb(255 255 255 / 0.65), inset 0 -1px 0 0 rgb(0 0 0 / 0.18);
+  --keycap-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.08), inset 0 -1px 0 0 rgb(0 0 0 / 0.5), 0 1px 1px 0 rgb(0 0 0 / 0.4);
+  --window-highlight: inset 0 1px 0 0 rgb(255 255 255 / 0.06);
 
   --grid-line: rgb(255 255 255 / 0.04);
   --radius: 0.75rem;
@@ -244,19 +317,12 @@
 
 /* The light "Download" key: dark ring + soft white glow + inner highlights. */
 @utility shadow-key {
-  box-shadow:
-    0 0 0 1px rgb(0 0 0 / 0.55),
-    0 0 14px 0 rgb(255 255 255 / 0.1),
-    inset 0 1px 0 0 rgb(255 255 255 / 0.65),
-    inset 0 -1px 0 0 rgb(0 0 0 / 0.18);
+  box-shadow: var(--key-shadow);
 }
 
 /* A glassy keycap. */
 @utility shadow-keycap {
-  box-shadow:
-    inset 0 1px 0 0 rgb(255 255 255 / 0.08),
-    inset 0 -1px 0 0 rgb(0 0 0 / 0.5),
-    0 1px 1px 0 rgb(0 0 0 / 0.4);
+  box-shadow: var(--keycap-shadow);
 }
 
 /* Floating glass bar / window. */
@@ -271,7 +337,7 @@
   background: var(--surface);
   border: 1px solid var(--border-strong);
   box-shadow:
-    inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+    var(--window-highlight),
     var(--elevation-4);
 }
 

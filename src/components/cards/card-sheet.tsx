@@ -141,7 +141,7 @@ function CardPanel({ card, sourceListName }: { card: CardDto; sourceListName: st
           <a href={card.trelloUrl} target="_blank" rel="noreferrer noopener">
             <ExportSquare className="size-4" />
             Open in Trello
-            <Kbd className="border-black/10 bg-black/10 text-primary-foreground/70 shadow-none">O</Kbd>
+            <Kbd className="border-primary-foreground/15 bg-primary-foreground/10 text-primary-foreground/70 shadow-none">O</Kbd>
           </a>
         </Button>
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">

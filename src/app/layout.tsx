@@ -17,15 +17,18 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#07080a',
-  colorScheme: 'dark',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f3f3f5' },
+    { media: '(prefers-color-scheme: dark)', color: '#07080a' },
+  ],
+  colorScheme: 'dark light',
   width: 'device-width',
   initialScale: 1,
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="en" suppressHydrationWarning className={cn('dark h-full antialiased', inter.variable, geistMono.variable)}>
+    <html lang="en" suppressHydrationWarning className={cn('h-full antialiased', inter.variable, geistMono.variable)}>
       <body className="min-h-full bg-background font-sans text-foreground">
         <a
           href="#main"

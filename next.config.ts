@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   typedRoutes: false,
   devIndicators: false,
+  // The workspace has other apps (and lockfiles) above this folder: watch this project only.
+  turbopack: { root: process.cwd() },
   // Native / Node-only packages stay out of the bundle.
   serverExternalPackages: ['pino', 'pino-pretty', 'better-sqlite3', '@prisma/adapter-better-sqlite3', '@anthropic-ai/claude-agent-sdk'],
   experimental: {
