@@ -8,8 +8,10 @@ import { scopeKindSchema, scopeSizeSchema, scopeStatusSchema } from '~/lib/scope
 import { scopeContentKey } from '~/server/modules/scope/scope-content';
 import { riskService } from '~/server/modules/risk/risk.service';
 import { parsePages, parseScreenshots } from '~/server/modules/preview/card-preview.service';
+import { checkSummarySchema, checksStatusSchema } from '~/lib/checks';
+import type { UsageTotals } from '~/lib/usage';
 import type { CardDto } from '~/types/card';
-import type { RunStatus } from '~/types/run';
+import type { RunKind, RunStatus } from '~/types/run';
 
 /** Parses a JSON column. A malformed value degrades to the fallback instead of breaking the board. */
 export function parseJson<S extends ZodType>(value: string, schema: S, fallback: z.output<S>): z.output<S> {
@@ -23,17 +25,19 @@ export function parseJson<S extends ZodType>(value: string, schema: S, fallback:
 
 /** Prisma `include` giving the presenter the card's latest run. */
 export const cardInclude = {
-  runs: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, error: true } },
+  runs: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, error: true, kind: true, fixRound: true } },
 } as const;
 
 export type CardPresentContext = {
   sourceListId: string;
   /** Queue position by run id (1-based), for "Queued (2nd)". */
   queuePositions?: Map<string, number>;
+  /** Time and usage totals by card id. */
+  usage?: Map<string, UsageTotals>;
 };
 
 export function presentCard(
-  row: Card & { runs?: Pick<Run, 'id' | 'status' | 'error'>[] },
+  row: Card & { runs?: Pick<Run, 'id' | 'status' | 'error' | 'kind' | 'fixRound'>[] },
   ctx: CardPresentContext,
 ): CardDto {
   const checklists = parseJson(row.checklistsJson, cardChecklistsSchema, []);
@@ -87,9 +91,20 @@ export function presentCard(
       screenshots: parseScreenshots(row.screenshotsJson).map((s) => ({ ...s, url: `/api/cards/${row.id}/screenshots/${s.file}` })),
       error: row.screenshotError,
     },
+    checks: (() => {
+      const status = checksStatusSchema.safeParse(row.checksStatus);
+      return status.success ? { status: status.data, checks: parseJson(row.checksJson ?? '[]', checkSummarySchema, []) } : null;
+    })(),
+    usage: ctx.usage?.get(row.id) ?? null,
     activeRun:
       latest && latestStatus && isActiveRunStatus(latestStatus)
-        ? { id: latest.id, status: latestStatus, queuePosition: ctx.queuePositions?.get(latest.id) ?? null }
+        ? {
+            id: latest.id,
+            status: latestStatus,
+            kind: latest.kind as RunKind,
+            fixRound: latest.fixRound,
+            queuePosition: ctx.queuePositions?.get(latest.id) ?? null,
+          }
         : null,
     lastRun: latest && latestStatus ? { id: latest.id, status: latestStatus, error: latest.error } : null,
     trelloLastActivity: row.trelloLastActivity.toISOString(),

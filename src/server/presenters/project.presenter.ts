@@ -1,5 +1,6 @@
 import 'server-only';
 import type { Prisma } from '~/generated/prisma/client';
+import { parseCheckConfigs } from '~/server/modules/checks/checks.service';
 import type { ProjectDto } from '~/types/project';
 
 /** Prisma `include` every project query uses, so the presenter has what it needs. */
@@ -37,6 +38,10 @@ export function presentProject(row: ProjectRow): ProjectDto {
     previewEnabled: row.previewEnabled,
     previewCommand: row.previewCommand,
     previewUrl: row.previewUrl,
+    checksEnabled: row.checksEnabled,
+    checks: parseCheckConfigs(row.checksJson),
+    checksAutoFix: row.checksAutoFix,
+    checksMaxFixRounds: row.checksMaxFixRounds,
     lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
     lastSyncError: row.syncLogs[0]?.error ?? null,
     cardCount: row._count.cards,

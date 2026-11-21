@@ -1,9 +1,10 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { qk } from '~/lib/query-keys';
 import { projectsApi } from '~/services/api/projects';
 import type { ProjectInput } from '~/schemas/project';
+import type { UsagePeriod } from '~/lib/usage';
 import type { BoardDto } from '~/types/card';
 import type { ProjectDto, SyncResultDto } from '~/types/project';
 
@@ -65,6 +66,20 @@ export const useCleanupDone = (projectId: string) => {
     },
   });
 };
+
+/** Time and Claude usage per period. Refreshes while open, so finished runs show up. */
+export const useProjectUsage = (projectId: string, period: UsagePeriod) =>
+  useQuery({
+    queryKey: qk.projects.usage(projectId, period),
+    queryFn: () => projectsApi.usage(projectId, period),
+    placeholderData: keepPreviousData,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+  });
+
+/** Typecheck, lint and tests found in the repository. Errors show inline in the form. */
+export const useSuggestChecks = () =>
+  useMutation({ mutationFn: (repoPath: string) => projectsApi.checkSuggestions(repoPath), meta: { silent: true } });
 
 /** Checks a repository path (spec §8.1). Errors show inline in the form. */
 export const useValidateRepo = () =>

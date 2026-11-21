@@ -1,5 +1,6 @@
 import 'server-only';
 import type { Run, RunEvent } from '~/generated/prisma/client';
+import { checksStatusSchema } from '~/lib/checks';
 import type { RunDto, RunEventDto, RunEventPayload, RunKind, RunStatus } from '~/types/run';
 
 export function presentRun(row: Run): RunDto {
@@ -7,13 +8,21 @@ export function presentRun(row: Run): RunDto {
     id: row.id,
     cardId: row.cardId,
     kind: row.kind as RunKind,
+    fixRound: row.fixRound,
     runner: row.runner,
     status: row.status as RunStatus,
     summary: row.summary,
     error: row.error,
     costUsd: row.costUsd,
     numTurns: row.numTurns,
+    model: row.model,
+    inputTokens: row.inputTokens,
+    outputTokens: row.outputTokens,
+    cacheReadTokens: row.cacheReadTokens,
+    cacheWriteTokens: row.cacheWriteTokens,
     durationMs: row.durationMs,
+    checksStatus: checksStatusSchema.nullable().catch(null).parse(row.checksStatus),
+    checksMs: row.checksMs,
     startedAt: row.startedAt?.toISOString() ?? null,
     endedAt: row.endedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),

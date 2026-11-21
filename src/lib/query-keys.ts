@@ -18,12 +18,15 @@ export const qk = {
     board: (projectId: string) => ['projects', projectId, 'board'] as const,
     /** The repository folder vs origin (toolbar chip). */
     repo: (projectId: string) => ['projects', projectId, 'repo'] as const,
+    /** Time and Claude usage of the project's cards, per period. */
+    usage: (projectId: string, period: string) => ['projects', projectId, 'usage', period] as const,
     /** Background polling sync (spec §6.4). */
     autoSync: (projectId: string) => ['projects', projectId, 'auto-sync'] as const,
   },
   cards: {
     detail: (cardId: string) => ['cards', cardId] as const,
     runs: (cardId: string) => ['cards', cardId, 'runs'] as const,
+    checks: (cardId: string) => ['cards', cardId, 'checks'] as const,
     changes: (cardId: string) => ['cards', cardId, 'changes'] as const,
     git: (cardId: string) => ['cards', cardId, 'git'] as const,
     trelloUpdates: (cardId: string) => ['cards', cardId, 'trello-updates'] as const,

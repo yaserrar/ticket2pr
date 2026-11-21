@@ -9,6 +9,7 @@ import { sharedWorktreePath } from '~/server/modules/git/shared-checkout';
 import type { ProjectInput } from '~/schemas/project';
 import { DEFAULT_SCOPE_RULES } from '~/lib/scope';
 import { scopeService } from '~/server/modules/scope/scope.service';
+import { checksService } from '~/server/modules/checks/checks.service';
 
 /**
  * Reads the board and the source list from Trello, so names stored locally
@@ -82,13 +83,17 @@ function scopeFields(input: ProjectInput) {
   return { scopeCheck: input.scopeCheck, scopeRules: rules && rules !== DEFAULT_SCOPE_RULES.trim() ? rules : null };
 }
 
-/** Risk paths and screenshots. Empty texts are stored as null. */
+/** Risk paths, screenshots and checks. Empty texts are stored as null; the checks are kept when turned off. */
 function reviewFields(input: ProjectInput) {
   return {
     riskPaths: input.riskPaths || null,
     previewEnabled: input.previewEnabled,
     previewCommand: input.previewCommand || null,
     previewUrl: input.previewUrl || null,
+    checksEnabled: input.checksEnabled,
+    checksJson: input.checks.length ? JSON.stringify(input.checks) : null,
+    checksAutoFix: input.checksAutoFix,
+    checksMaxFixRounds: input.checksMaxFixRounds,
   };
 }
 
@@ -114,6 +119,16 @@ async function assertModeChangeAllowed(projectId: string, before: ModeFields, af
 
 export const projectsService = {
   validateRepo,
+
+  /** Checks found in the repository (package.json scripts, Makefile, pyproject.toml), to start from. */
+  async suggestChecks(repoPath: string) {
+    const repo = await validateRepo(repoPath);
+    if (!repo.ok || !repo.repoPath) {
+      const failed = repo.checks.find((c) => !c.ok && c.blocking);
+      throw unprocessable(failed?.detail ?? 'This path is not a usable git repository.', { field: 'repoPath' });
+    }
+    return { checks: await checksService.suggest(repo.repoPath) };
+  },
 
   async list() {
     const rows = await prisma.project.findMany({ include: projectInclude, orderBy: { createdAt: 'asc' } });

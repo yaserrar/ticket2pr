@@ -85,6 +85,20 @@ export const useMoveCard = (projectId: string) => {
 export const useCardRuns = (cardId: string | null) =>
   useQuery({ queryKey: qk.cards.runs(cardId ?? ''), queryFn: () => cardsApi.runs(cardId!), enabled: Boolean(cardId) });
 
+/** The checks of the card's runs. Polls while checks or a run are going. */
+export const useCardChecks = (cardId: string, live: boolean) =>
+  useQuery({
+    queryKey: qk.cards.checks(cardId),
+    queryFn: () => cardsApi.checks(cardId),
+    refetchInterval: live ? 1_500 : false,
+  });
+
+/** Run the project's checks again, without Claude. */
+export const useRunChecks = (projectId: string, cardId: string) => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: () => cardsApi.runChecks(cardId), onSettled: () => refreshCard(qc, projectId, cardId, { git: false }) });
+};
+
 /** Retry or Request changes. */
 export const useCreateRun = (projectId: string, cardId: string) => {
   const qc = useQueryClient();

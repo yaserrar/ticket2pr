@@ -13,6 +13,7 @@ import type { TrelloUpdatesDto } from '~/types/client-loop';
 import type { CardDto } from '~/types/card';
 import type { ChangesDto, GitStatusDto } from '~/types/git';
 import type { RunDto } from '~/types/run';
+import type { RunChecksDto } from '~/types/checks';
 import { api } from './client';
 
 export const cardsApi = {
@@ -20,6 +21,8 @@ export const cardsApi = {
   move: (cardId: string, body: MoveCardInput) => api.patch<CardDto>(`/cards/${cardId}/move`, body),
   runs: (cardId: string) => api.get<RunDto[]>(`/cards/${cardId}/runs`),
   createRun: (cardId: string, body: CreateRunInput) => api.post<CardDto>(`/cards/${cardId}/runs`, body),
+  checks: (cardId: string) => api.get<RunChecksDto[]>(`/cards/${cardId}/checks`),
+  runChecks: (cardId: string) => api.post<CardDto>(`/cards/${cardId}/checks`),
   discard: (cardId: string) => api.post<CardDto>(`/cards/${cardId}/discard`),
   changes: (cardId: string) => api.get<ChangesDto>(`/cards/${cardId}/changes`),
   reset: (cardId: string) => api.post<{ ok: true }>(`/cards/${cardId}/reset`),

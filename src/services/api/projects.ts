@@ -2,6 +2,9 @@ import type { ProjectInput, SyncInput } from '~/schemas/project';
 import type { BoardDto } from '~/types/card';
 import type { ProjectDto, SyncResultDto } from '~/types/project';
 import type { RepoStatusDto, RepoValidationDto } from '~/types/git';
+import type { CheckSuggestionsDto } from '~/types/checks';
+import type { ProjectUsageDto } from '~/types/usage';
+import type { UsagePeriod } from '~/lib/usage';
 import { api } from './client';
 
 export const projectsApi = {
@@ -12,6 +15,10 @@ export const projectsApi = {
   remove: (projectId: string) => api.delete<{ ok: true }>(`/projects/${projectId}`),
   board: (projectId: string) => api.get<BoardDto>(`/projects/${projectId}/board`),
   validateRepo: (repoPath: string) => api.post<RepoValidationDto>('/projects/validate-repo', { repoPath }),
+  checkSuggestions: (repoPath: string) => api.post<CheckSuggestionsDto>('/projects/check-suggestions', { repoPath }),
+  usage: (projectId: string, period: UsagePeriod) => api.get<ProjectUsageDto>(`/projects/${projectId}/usage`, { period }),
+  /** A download link (the browser saves the CSV). */
+  usageCsvUrl: (projectId: string, period: UsagePeriod) => api.url(`/projects/${projectId}/usage/csv`, { period }),
   sync: (projectId: string, body: SyncInput) => api.post<SyncResultDto>(`/projects/${projectId}/sync`, body),
   repo: (projectId: string, refresh = false) => api.get<RepoStatusDto>(`/projects/${projectId}/repo`, refresh ? { refresh: '1' } : undefined),
   pull: (projectId: string) => api.post<RepoStatusDto & { pulled: number }>(`/projects/${projectId}/repo/pull`),
