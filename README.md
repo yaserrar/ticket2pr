@@ -125,6 +125,31 @@ explainable):
 Tests never raise the level. The level follows the diff: a new run or a manual edit re-assesses it, and a new verdict
 asks for the confirmation again.
 
+### Checks before review
+Turn it on in Project settings: after each run, Ticket2PR runs your project's checks in the card's folder (its worktree, or
+the shared branch's folder), with the same setup as the run, before the card can go to Review.
+- **Your commands.** A list of checks (name, command, timeout), filled from the repository when you turn it on:
+  `typecheck`, `lint` and `test` scripts from `package.json` (with the package manager your lockfile implies), or the
+  same targets in a `Makefile`, or ruff, mypy and pytest from `pyproject.toml`. Edit them freely. Commands only ever
+  come from Project settings, never from a card.
+- **Auto-fix.** When a check fails, Claude continues the same session with the end of the failing output and is asked
+  to fix the cause, never to skip tests or turn lint rules off. Then the checks run again, up to the number of fix
+  rounds you choose (2 by default). Each round is its own run in the *Run* tab.
+- **Still failing?** The card goes to Review anyway, flagged **Checks failing**. **Push** and **Open pull request**
+  ask you to confirm each time, and the pull request lists the checks.
+- **Checks tab:** each check with its status (passed, failed, timed out, skipped), duration and the end of its output,
+  live while it runs, and the earlier rounds. **Run checks** runs them again without Claude, after you edit the code
+  yourself. **Stop** ends a running check and everything it started.
+
+### Time and usage
+Every run records its wall-clock time (checks included) and the usage Claude Code reports: input, output and cache
+tokens, turns, model, and the **API-equivalent cost** (what those tokens would cost on the API; your subscription covers
+it, so it measures the work, it isn't a charge).
+- **Per card:** totals and a per-run breakdown in the *Run* tab, and a small hint on the board card.
+- **Per project:** *Time and usage* (board toolbar, project menu or ⌘K) shows this week, this month, last month and all
+  time, with the cards of each period. **Export CSV** downloads one line per card (time in hours, runs, fix rounds,
+  tokens, cost), ready for billing maintenance work.
+
 ### Screenshots for the client
 Turn it on in Project settings with the command that starts your app (for example
 `cp "$REPO_PATH/.env" . && npm run dev -- --port $PORT`). When Claude changes something visible, it names up to three
@@ -215,6 +240,8 @@ src/server/modules/workflow/workflow.service.ts  every status change of a card
 src/server/modules/runs/                       queue, executor, live stream, prompt, runners (claude, fake)
 src/server/modules/scope/                      scope check: prompt, read-only classifier (claude, fake), queue
 src/lib/risk.ts, src/server/modules/risk/      risk flag rules (unit-tested) and storage
+src/lib/checks.ts, src/server/modules/checks/  checks before review: suggestions (unit-tested), running them
+src/lib/usage.ts, src/server/modules/usage/    time and token usage: totals, periods, CSV (unit-tested)
 src/server/modules/preview/                    start the app, screenshots with Chrome (playwright-core)
 src/server/modules/git/                        repository checks, worktrees, shared branch, diff, commit and push
 src/server/presenters/*.presenter.ts           database row → API shape (src/types/*)
@@ -231,7 +258,9 @@ project's conventions (also used by coding agents).
 
 `RUNNER="fake"` simulates runs: they stream like real ones and write a `TICKET2PR_FAKE_RUN.md` file in the worktree.
 Scope checks are simulated too: in scope, unless the card says `[fake:out-of-scope]`, `[fake:unsure]` or
-`[fake:scope-fail]`. `[fake:ui /contact]` makes the fake run name pages for screenshots.
+`[fake:scope-fail]`. `[fake:ui /contact]` makes the fake run name pages for screenshots. With checks on,
+`[fake:checks-fail-once]` makes the first check fail until the first fix round, and `[fake:checks-fail]` until the end (the
+card reaches Review flagged). Fake runs report plausible token usage.
 `TRELLO_API_BASE` and `GITHUB_API_BASE` point the clients at a local mock server, `WORKTREES_DIR` moves the
 worktrees, and `FAKE_RUNNER_STEP_MS` speeds up fake runs. With a throwaway database:
 
