@@ -17,11 +17,13 @@ import { RepoFields } from './repo-fields';
 import { WriteBackFields } from './write-back-fields';
 import { ScopeFields } from './scope-fields';
 import { ReviewFields } from './review-fields';
+import { ChecksFields } from './checks-fields';
 import { DEFAULT_SCOPE_RULES } from '~/lib/scope';
 
 /**
  * Project form (spec §11.2): Trello board → source list → name, then the
- * repository (path, base branch, how cards are worked on, setup command).
+ * repository (path, base branch, how cards are worked on, setup command),
+ * the checks run before review, and the review aids.
  */
 export function ProjectForm({
   project,
@@ -58,6 +60,10 @@ export function ProjectForm({
       previewEnabled: project?.previewEnabled ?? false,
       previewCommand: project?.previewCommand ?? '',
       previewUrl: project?.previewUrl ?? '',
+      checksEnabled: project?.checksEnabled ?? false,
+      checks: project?.checks ?? [],
+      checksAutoFix: project?.checksAutoFix ?? true,
+      checksMaxFixRounds: project?.checksMaxFixRounds ?? 2,
     },
   });
   const boardId = useWatch({ control: form.control, name: 'trelloBoardId' });
@@ -183,6 +189,11 @@ export function ProjectForm({
         <p className="text-[13px] text-muted-foreground">Needed to start work on cards. You can add it later.</p>
       </div>
       <RepoFields form={form} initialPath={project?.repoPath} />
+
+      <div className="flex flex-col gap-1 border-t pt-5">
+        <h3 className="eyebrow font-medium text-subtle-foreground">Checks</h3>
+      </div>
+      <ChecksFields form={form} />
 
       <div className="flex flex-col gap-1 border-t pt-5">
         <h3 className="eyebrow font-medium text-subtle-foreground">Review</h3>

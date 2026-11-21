@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ExportSquare, Refresh, Trello, Warning2 } from 'iconsax-react';
+import { ExportSquare, Refresh, Timer1, Trello, Warning2 } from 'iconsax-react';
 import { Kbd } from '~/components/shared/kbd';
 import { RelativeTime } from '~/components/shared/relative-time';
 import { Button } from '~/components/ui/button';
@@ -14,8 +14,8 @@ import { RepoChip } from './repo-chip';
 
 /**
  * Board header (spec §11.3): project and Trello source on the left; sync
- * status ("Synced 2 min ago"), polling interval, the repository chip and
- * Refresh on the right.
+ * status ("Synced 2 min ago"), polling interval, the repository chip, time
+ * and usage, and Refresh on the right.
  */
 export function BoardToolbar({
   project,
@@ -86,6 +86,17 @@ export function BoardToolbar({
           ) : null}
         </div>
         <RepoChip project={project} />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {/* Phones reach it from the project menu and ⌘K: the toolbar stays on one line. */}
+            <Button variant="outline" size="icon-sm" asChild className="hidden sm:inline-flex">
+              <Link href={`/projects/${project.id}/usage`} aria-label="Time and usage">
+                <Timer1 className="size-4" />
+              </Link>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Time and usage</TooltipContent>
+        </Tooltip>
         <Button variant="outline" size="sm" onClick={onRefresh} disabled={syncing} className={cn('gap-2 pr-1.5')}>
           <Refresh className={cn('size-4', syncing && 'animate-spin motion-reduce:animate-none')} />
           Refresh

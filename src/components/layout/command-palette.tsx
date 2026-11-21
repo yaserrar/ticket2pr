@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Command as CommandPrimitive } from 'cmdk';
-import { AddSquare, ExportSquare, Kanban, Refresh, SearchNormal1, Setting2, Setting4 } from 'iconsax-react';
+import { AddSquare, ExportSquare, Kanban, Refresh, SearchNormal1, Setting2, Setting4, Timer1 } from 'iconsax-react';
 import { LogoMark } from '~/components/brand/logo';
 import { useRefreshBoard } from '~/components/board/use-refresh-board';
 import { Kbd } from '~/components/shared/kbd';
@@ -108,6 +108,10 @@ export function CommandPalette() {
                       Open board in Trello
                     </Item>
                   ) : null}
+                  <Item value="time usage tokens cost billing csv export" onSelect={() => run(() => router.push(`/projects/${project.id}/usage`))}>
+                    <Timer1 className="size-4 text-muted-foreground" />
+                    Time and usage
+                  </Item>
                   <Item value="project settings" onSelect={() => run(() => router.push(`/projects/${project.id}/settings`))}>
                     <Setting4 className="size-4 text-muted-foreground" />
                     Project settings

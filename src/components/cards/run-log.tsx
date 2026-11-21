@@ -5,7 +5,10 @@ import { ArrowRight2, Code, Danger, DocumentText1, Edit2, Flash, SearchNormal1, 
 import { Spinner } from '~/components/ui/spinner';
 import { formatDuration } from '~/lib/format';
 import { cn } from '~/lib/utils';
+import { formatTokens } from '~/lib/usage';
 import type { RunEventDto } from '~/types/run';
+import { CheckStatusChip } from './checks-tab';
+import { COST_NOTE } from './usage-panel';
 
 /**
  * A run's live log (spec §7.4): agent messages as text, tool calls as compact
@@ -136,8 +139,14 @@ function EventRow({ event }: { event: RunEventDto }) {
               <dt>duration</dt>
               <dd className="text-foreground">{formatDuration(event.durationMs)}</dd>
             </div>
-            <div className="flex gap-1.5" title={event.costIsEstimate ? 'What this run would cost on the API. With your Claude subscription it is covered by your plan.' : undefined}>
-              <dt>{event.costIsEstimate ? 'API value' : 'cost'}</dt>
+            {event.tokens !== undefined ? (
+              <div className="flex gap-1.5">
+                <dt>tokens</dt>
+                <dd className="text-foreground">{formatTokens(event.tokens)}</dd>
+              </div>
+            ) : null}
+            <div className="flex gap-1.5" title={event.costIsEstimate ? COST_NOTE : undefined}>
+              <dt>{event.costIsEstimate ? 'API-equivalent' : 'cost'}</dt>
               <dd className="text-foreground">
                 {event.costIsEstimate ? '≈ ' : ''}${event.costUsd.toFixed(2)}
                 {event.costIsEstimate ? <span className="text-subtle-foreground"> · covered by your plan</span> : null}
@@ -145,6 +154,15 @@ function EventRow({ event }: { event: RunEventDto }) {
             </div>
           </dl>
         </div>
+      );
+    case 'check':
+      return (
+        <p className="flex flex-wrap items-center gap-2 text-[13px]">
+          <CheckStatusChip status={event.status} />
+          <span className="font-medium text-foreground">{event.name}</span>
+          <code className="min-w-0 truncate font-mono text-[11.5px] text-muted-foreground">{event.command}</code>
+          <span className="ml-auto font-mono text-[11px] text-subtle-foreground">{formatDuration(event.durationMs)}</span>
+        </p>
       );
     default:
       return null;

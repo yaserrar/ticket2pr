@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { AddSquare, ArrowDown2, Kanban, Setting4, TickCircle } from 'iconsax-react';
+import { AddSquare, ArrowDown2, Kanban, Setting4, TickCircle, Timer1 } from 'iconsax-react';
 import { Button } from '~/components/ui/button';
 import {
   DropdownMenu,
@@ -46,12 +46,20 @@ export function ProjectSwitcher({ currentId }: { currentId?: string }) {
         ))}
         <DropdownMenuSeparator />
         {current ? (
-          <DropdownMenuItem asChild>
-            <Link href={`/projects/${current.id}/settings`}>
-              <Setting4 className="size-4" />
-              Project settings
-            </Link>
-          </DropdownMenuItem>
+          <>
+            <DropdownMenuItem asChild>
+              <Link href={`/projects/${current.id}/usage`}>
+                <Timer1 className="size-4" />
+                Time and usage
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={`/projects/${current.id}/settings`}>
+                <Setting4 className="size-4" />
+                Project settings
+              </Link>
+            </DropdownMenuItem>
+          </>
         ) : null}
         <DropdownMenuItem asChild>
           <Link href="/projects/new">

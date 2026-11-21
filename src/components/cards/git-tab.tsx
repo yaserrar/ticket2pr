@@ -13,6 +13,7 @@ import { ReasonButton } from '~/components/shared/reason-button';
 import { Button } from '~/components/ui/button';
 import { Skeleton } from '~/components/ui/skeleton';
 import { needsRiskReview, RiskReviewCheck } from './risk';
+import { checksFailing, ChecksFailingCheck } from './checks-tab';
 import { useCleanupCard, useCommit, useDiscardCard, useGitStatus, useMoveCard, useOpenPr, usePush, useUpdateBase } from '~/hooks/cards';
 import { getErrorMessage } from '~/lib/api-errors';
 import { plural } from '~/lib/format';
@@ -236,6 +237,7 @@ function PushSection({ card, git, busy }: { card: CardDto; git: GitStatusDto; bu
   const push = usePush(card.projectId, card.id);
   const [error, setError] = React.useState<string | null>(null);
   const [reviewed, setReviewed] = React.useState(false);
+  const [checksOk, setChecksOk] = React.useState(false);
   const pushable = !busy && git.hasRemote && git.uncommittedFiles === 0 && git.commitsAhead > 0 && !(git.remoteBranchExists && git.unpushedCommits === 0);
   const reason =
     busy ??
@@ -247,9 +249,11 @@ function PushSection({ card, git, busy }: { card: CardDto; git: GitStatusDto; bu
           ? 'Nothing to push: commit first.'
           : git.remoteBranchExists && git.unpushedCommits === 0
             ? 'Already pushed.'
-            : needsRiskReview(card) && !reviewed
-              ? 'High-risk changes: confirm you reviewed them first.'
-              : null);
+            : checksFailing(card) && !checksOk
+              ? 'The checks are failing: confirm to push anyway.'
+              : needsRiskReview(card) && !reviewed
+                ? 'High-risk changes: confirm you reviewed them first.'
+                : null);
 
   return (
     <Section title="Push">
@@ -257,6 +261,7 @@ function PushSection({ card, git, busy }: { card: CardDto; git: GitStatusDto; bu
         Runs <code className="rounded-sm bg-fill-raised px-1 font-mono text-xs">git push -u origin {git.branchName}</code> with your own git
         credentials.{git.workMode === 'SHARED_BRANCH' ? ' The card then moves to Done, and the next card can start.' : ''}
       </p>
+      {pushable ? <ChecksFailingCheck card={card} checked={checksOk} onChange={setChecksOk} /> : null}
       {pushable ? <RiskReviewCheck card={card} checked={reviewed} onChange={setReviewed} /> : null}
       {error ? (
         <pre role="alert" className="overflow-x-auto rounded-lg border border-danger/25 bg-danger-subtle p-3 font-mono text-[11.5px] whitespace-pre-wrap text-danger-muted">
@@ -271,7 +276,7 @@ function PushSection({ card, git, busy }: { card: CardDto; git: GitStatusDto; bu
           reason={reason}
           onClick={() => {
             setError(null);
-            push.mutate({ riskReviewed: reviewed }, {
+            push.mutate({ riskReviewed: reviewed, checksFailingConfirmed: checksOk }, {
               onSuccess: ({ branchName, done }) => toast.success(done ? `Pushed ${branchName}. The card is Done.` : `Pushed ${branchName}`),
               onError: (e) => setError(getErrorMessage(e)),
             });
@@ -294,6 +299,7 @@ function PullRequestSection({ card, git, busy }: { card: CardDto; git: GitStatus
   const [error, setError] = React.useState<string | null>(null);
   const [compareOpened, setCompareOpened] = React.useState(false);
   const [reviewed, setReviewed] = React.useState(false);
+  const [checksOk, setChecksOk] = React.useState(false);
   const form = useForm<z.infer<typeof prForm>>({ resolver: zodResolver(prForm), defaultValues: git.suggestedPr });
 
   const markDone = () => {
@@ -332,13 +338,15 @@ function PullRequestSection({ card, git, busy }: { card: CardDto; git: GitStatus
       ? 'Pull requests need a github.com origin remote.'
       : !git.remoteBranchExists || git.unpushedCommits > 0 || git.uncommittedFiles > 0
         ? 'Commit and push the branch first.'
-        : needsRiskReview(card) && !reviewed
-          ? 'High-risk changes: confirm you reviewed them first.'
-          : null);
+        : checksFailing(card) && !checksOk
+          ? 'The checks are failing: confirm to continue anyway.'
+          : needsRiskReview(card) && !reviewed
+            ? 'High-risk changes: confirm you reviewed them first.'
+            : null);
 
   const onSubmit = form.handleSubmit((values) => {
     setError(null);
-    openPr.mutate({ ...values, riskReviewed: reviewed }, {
+    openPr.mutate({ ...values, riskReviewed: reviewed, checksFailingConfirmed: checksOk }, {
       onSuccess: (res) => {
         if (res.prUrl) toast.success('Pull request opened. The card moved to Done.');
         else if (res.compareUrl) {
@@ -360,6 +368,7 @@ function PullRequestSection({ card, git, busy }: { card: CardDto; git: GitStatus
             No GitHub token saved: this opens GitHub’s “compare” page with the branch selected. Add a token in Settings to open it from here.
           </p>
         ) : null}
+        <ChecksFailingCheck card={card} checked={checksOk} onChange={setChecksOk} />
         <RiskReviewCheck card={card} checked={reviewed} onChange={setReviewed} />
         <FormError message={error} />
         <div className="flex flex-wrap items-center gap-2">

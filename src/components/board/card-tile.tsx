@@ -1,16 +1,18 @@
 'use client';
 
 import * as React from 'react';
-import { ExportSquare, TaskSquare, TextalignLeft } from 'iconsax-react';
+import { ExportSquare, TaskSquare, TextalignLeft, Timer1 } from 'iconsax-react';
 import { CardBadges } from '~/components/cards/card-badges';
 import { LabelList } from '~/components/cards/label-chip';
 import { CardRunState } from '~/components/cards/run-state';
 import { cn } from '~/lib/utils';
+import { formatDuration, plural } from '~/lib/format';
+import { formatCost, formatTokens } from '~/lib/usage';
 import type { CardDto } from '~/types/card';
 
 /**
  * Board card (spec §11.3): short link, title, labels, run state, then
- * checklist progress, a description hint and Trello-side badges.
+ * checklist progress, a description hint, time and usage, and badges.
  * Presentational: dragging and opening are wired by <SortableCardTile/>.
  */
 export type CardTileProps = {
@@ -27,7 +29,8 @@ export const CardTile = React.forwardRef<HTMLDivElement, CardTileProps>(function
   ref,
 ) {
   const { done, total } = card.checklistProgress;
-  const hasFooter = total > 0 || card.description.trim().length > 0;
+  const usage = card.usage && (card.usage.durationMs > 0 || card.usage.tokens > 0) ? card.usage : null;
+  const hasFooter = total > 0 || card.description.trim().length > 0 || Boolean(usage);
   const running = card.activeRun?.status === 'RUNNING';
 
   return (
@@ -79,6 +82,17 @@ export const CardTile = React.forwardRef<HTMLDivElement, CardTileProps>(function
             >
               <TaskSquare className="size-3.5" aria-hidden />
               {done}/{total}
+            </span>
+          ) : null}
+          {usage ? (
+            <span
+              className="ml-auto inline-flex min-w-0 items-center gap-1 font-mono"
+              title={`${plural(usage.runs, 'run')} · ${formatDuration(usage.durationMs)} · ${formatTokens(usage.tokens)} tokens · ≈ ${formatCost(usage.costUsd)} API-equivalent (reported by Claude Code)`}
+            >
+              <Timer1 className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate">
+                {formatDuration(usage.durationMs)} · ≈{formatCost(usage.costUsd)}
+              </span>
             </span>
           ) : null}
         </div>

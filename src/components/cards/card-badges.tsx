@@ -1,6 +1,9 @@
 import {
   ArchiveSlash,
   ArrowSwapHorizontal,
+  CloseCircle,
+  MinusCirlce,
+  TaskSquare,
   Danger,
   Edit2,
   MessageQuestion,
@@ -14,6 +17,7 @@ import {
   Warning2,
 } from 'iconsax-react';
 import { RISK_META } from '~/lib/risk';
+import { failingNames } from '~/lib/checks';
 import { cn } from '~/lib/utils';
 import type { CardDto } from '~/types/card';
 
@@ -65,9 +69,26 @@ function riskBadge(card: CardDto) {
   return { key: 'risk', icon, label: reviewed ? 'High risk · reviewed' : meta.label, tone, title };
 }
 
+/** After a run: the project's checks on the card's work (while they run, the run state says so). */
+function checksBadge(card: CardDto) {
+  const { checks } = card;
+  if (!checks || checks.status === 'RUNNING' || card.activeRun || (card.status !== 'IN_PROGRESS' && card.status !== 'REVIEW')) return null;
+  const passed = checks.checks.filter((c) => c.status === 'PASSED').length;
+  const count = `${passed}/${checks.checks.length}`;
+  switch (checks.status) {
+    case 'PASSED':
+      return { key: 'checks', icon: TaskSquare, label: `Checks passed ${count}`, tone: SUCCESS, title: checks.checks.map((c) => c.name).join(', ') };
+    case 'FAILED':
+      return { key: 'checks', icon: CloseCircle, label: 'Checks failing', tone: DANGER, title: `Failing: ${failingNames(checks.checks)}` };
+    case 'STOPPED':
+      return { key: 'checks', icon: MinusCirlce, label: 'Checks stopped', tone: NEUTRAL };
+  }
+}
+
 export function CardBadges({ card, className }: { card: CardDto; className?: string }) {
   const badges = [
     scopeBadge(card),
+    checksBadge(card),
     riskBadge(card),
     card.removedFromTrello
       ? { key: 'removed', icon: ArchiveSlash, label: 'Removed from Trello', tone: 'border-border-strong bg-fill text-muted-foreground' }

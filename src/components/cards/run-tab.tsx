@@ -19,6 +19,7 @@ import type { RunDto } from '~/types/run';
 import { RequestChangesForm } from './request-changes';
 import { RunLog } from './run-log';
 import { RUN_STATUS_META, RunStatusPill } from './run-state';
+import { runKindLabel, UsagePanel } from './usage-panel';
 
 /** Run tab (spec §11.4): live log, Stop, run history, Retry, Request changes. */
 export function RunTab({ card }: { card: CardDto }) {
@@ -53,6 +54,7 @@ export function RunTab({ card }: { card: CardDto }) {
 
   return (
     <div className="flex flex-col gap-5">
+      <UsagePanel totals={card.usage} runs={list} />
       {selected ? (
         <>
           <div className="flex flex-wrap items-center gap-2">
@@ -82,7 +84,13 @@ export function RunTab({ card }: { card: CardDto }) {
                     confirmLabel: 'Stop run',
                     destructive: true,
                   });
-                  if (ok) cancel.mutate(selected.id, { onSuccess: () => toast.success('Run stopped') });
+                  if (ok)
+                    cancel.mutate(selected.id, {
+                      onSuccess: (run) =>
+                        run.status === 'RUNNING'
+                          ? toast.info('Stopping the run', { description: 'It ends as soon as its processes have exited.' })
+                          : toast.success('Run stopped'),
+                    });
                 }}
               >
                 <StopCircle className="size-4" />
@@ -121,7 +129,7 @@ export function RunTab({ card }: { card: CardDto }) {
 function runLabel(run: RunDto, number: number) {
   const parts = [
     `#${number}`,
-    run.kind === 'FOLLOW_UP' ? 'Follow-up' : 'Initial',
+    runKindLabel(run),
     RUN_STATUS_META[run.status].label,
     run.durationMs ? formatDuration(run.durationMs) : null,
     formatRelative(run.createdAt),

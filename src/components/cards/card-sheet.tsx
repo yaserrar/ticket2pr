@@ -13,6 +13,7 @@ import { useBoard } from '~/hooks/projects';
 import { useHotkey } from '~/hooks/use-hotkey';
 import type { CardDto } from '~/types/card';
 import { ChangesTab } from './changes-tab';
+import { ChecksTab } from './checks-tab';
 import { ClientTab, clientNeedsAttention } from './client-tab';
 import { DetailsTab } from './details-tab';
 import { GitTab } from './git-tab';
@@ -21,20 +22,21 @@ import { CardRunState } from './run-state';
 import { RunTab } from './run-tab';
 import { StatusPill } from './status-dot';
 
-export const TABS = ['details', 'run', 'changes', 'git', 'client'] as const;
+export const TABS = ['details', 'run', 'checks', 'changes', 'git', 'client'] as const;
 type Tab = (typeof TABS)[number];
 
 /** The tab that matters most for where the card is. */
 function defaultTab(card: CardDto): Tab {
   if (card.clientRepliedAt || (card.status === 'REVIEW' && card.clientQuestions && !card.waitingSince)) return 'client';
   if (card.status === 'IN_PROGRESS') return 'run';
+  if (card.status === 'REVIEW' && card.checks?.status === 'FAILED') return 'checks';
   if (card.status === 'REVIEW') return 'changes';
   if (card.status === 'DONE' && card.hasWorktree) return 'git';
   return 'details';
 }
 
 /**
- * Card panel (spec §11.4): Details · Run · Changes · Git, with a Raycast-style
+ * Card panel (spec §11.4): Details · Run · Checks · Changes · Git · Client, with a Raycast-style
  * action bar footer. The card comes from the (polled) board, so its state stays
  * live while a run works. `?tab=` keeps the tab in the URL.
  */
@@ -103,11 +105,20 @@ function CardPanel({ card, sourceListName }: { card: CardDto; sourceListName: st
             ))}
           </div>
         ) : null}
-        <TabsList className="mt-1 h-8! w-full justify-start bg-fill sm:w-fit">
+        {/* Six tabs fit a phone once their padding tightens. */}
+        <TabsList className="mt-1 h-8! w-full justify-start bg-fill max-sm:*:px-1.5 max-sm:*:text-[13px] sm:w-fit">
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="run" className="gap-1.5">
             Run
             {card.activeRun?.status === 'RUNNING' ? <span aria-label="running" className="dot-running size-1.5 rounded-full" /> : null}
+          </TabsTrigger>
+          <TabsTrigger value="checks" className="gap-1.5">
+            Checks
+            {card.checks?.status === 'RUNNING' ? (
+              <span aria-label="running" className="dot-running size-1.5 rounded-full" />
+            ) : card.checks?.status === 'FAILED' ? (
+              <span aria-label="failing" className="size-1.5 rounded-full bg-danger" />
+            ) : null}
           </TabsTrigger>
           <TabsTrigger value="changes">Changes</TabsTrigger>
           <TabsTrigger value="git">Git</TabsTrigger>
@@ -124,6 +135,9 @@ function CardPanel({ card, sourceListName }: { card: CardDto; sourceListName: st
         </TabsContent>
         <TabsContent value="run">
           <RunTab card={card} />
+        </TabsContent>
+        <TabsContent value="checks">
+          <ChecksTab card={card} />
         </TabsContent>
         <TabsContent value="changes">
           <ChangesTab card={card} />

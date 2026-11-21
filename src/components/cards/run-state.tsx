@@ -19,14 +19,20 @@ export const RUN_STATUS_META: Record<RunStatus, { label: string; tone: 'brand' |
   INTERRUPTED: { label: 'Interrupted', tone: 'danger' },
 };
 
-/** Run state on a board card (spec §9.3): running, queued (2nd), failed / stopped / interrupted, PR opened. */
+/** Run state on a board card (spec §9.3): running (agent, checks, fix round), queued (2nd), failed / stopped / interrupted, PR opened. */
 export function CardRunState({ card, className }: { card: CardDto; className?: string }) {
   const run = card.activeRun;
   if (run?.status === 'RUNNING') {
+    const label =
+      card.checks?.status === 'RUNNING' || run.kind === 'CHECKS'
+        ? 'Running checks…'
+        : run.kind === 'FIX'
+          ? `Fixing checks, round ${run.fixRound ?? 1}…`
+          : 'Agent working…';
     return (
       <span className={cn('flex items-center gap-2 text-[11.5px] font-medium', className)}>
         <span aria-hidden className="dot-running size-1.5 rounded-full" />
-        <span className="text-shimmer">Agent working…</span>
+        <span className="text-shimmer">{label}</span>
       </span>
     );
   }
@@ -34,7 +40,8 @@ export function CardRunState({ card, className }: { card: CardDto; className?: s
     return (
       <span className={cn('flex items-center gap-1.5 text-[11.5px] text-muted-foreground', className)}>
         <Clock className="size-3.5" aria-hidden />
-        Queued{run.queuePosition ? ` (${ordinal(run.queuePosition)})` : ''}
+        {run.kind === 'CHECKS' ? 'Checks queued' : 'Queued'}
+        {run.queuePosition ? ` (${ordinal(run.queuePosition)})` : ''}
       </span>
     );
   }
@@ -67,7 +74,7 @@ export function CardRunState({ card, className }: { card: CardDto; className?: s
   return null;
 }
 
-const TONE_CLASS = {
+export const TONE_CLASS = {
   brand: 'border-brand-border bg-brand-subtle text-brand-muted',
   muted: 'border-border-strong bg-fill text-muted-foreground',
   success: 'border-success/30 bg-success-subtle text-success-muted',
