@@ -4,6 +4,7 @@ import { notFound } from '~/server/http/errors';
 import { cardInclude, presentCard } from '~/server/presenters/card.presenter';
 import { presentProject, projectInclude } from '~/server/presenters/project.presenter';
 import { CARD_STATUSES, type CardStatus } from '~/schemas/common';
+import { workUsageService } from '~/server/modules/usage/work-usage.service';
 import type { BoardDto, CardDto } from '~/types/card';
 
 /** 1-based position of every queued run, across projects (they share the run slots). */
@@ -24,10 +25,10 @@ export const cardsService = {
     });
     if (!project) throw notFound('Project');
 
-    const positions = await queuePositions();
+    const [positions, usage] = await Promise.all([queuePositions(), workUsageService.byCard({ card: { projectId } })]);
     const columns = Object.fromEntries(CARD_STATUSES.map((s) => [s, [] as CardDto[]])) as Record<CardStatus, CardDto[]>;
     for (const row of project.cards) {
-      const card = presentCard(row, { sourceListId: project.trelloSourceListId, queuePositions: positions });
+      const card = presentCard(row, { sourceListId: project.trelloSourceListId, queuePositions: positions, usage });
       columns[card.status].push(card);
     }
     return { project: presentProject(project), columns };
@@ -39,6 +40,7 @@ export const cardsService = {
       include: { ...cardInclude, project: { select: { trelloSourceListId: true } } },
     });
     if (!row) throw notFound('Card');
-    return presentCard(row, { sourceListId: row.project.trelloSourceListId, queuePositions: await queuePositions() });
+    const [positions, usage] = await Promise.all([queuePositions(), workUsageService.byCard({ cardId })]);
+    return presentCard(row, { sourceListId: row.project.trelloSourceListId, queuePositions: positions, usage });
   },
 };

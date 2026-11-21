@@ -7,6 +7,8 @@ import { workflowService } from '~/server/modules/workflow/workflow.service';
 import type { ChangesDto, GitStatusDto } from '~/types/git';
 import type { CommitInput, OpenPrInput, PushInput } from '~/schemas/card';
 import { riskMarkdown } from '~/lib/risk';
+import { checkSummarySchema, checksMarkdown, checksStatusSchema, failingNames } from '~/lib/checks';
+import { parseJson } from '~/server/presenters/card.presenter';
 import { riskService } from '~/server/modules/risk/risk.service';
 import { addLabels } from '~/server/modules/github/github.client';
 import { commitAll, getBranchStatus, getChanges, pushBranch, resetChanges } from './changes';
@@ -40,6 +42,22 @@ async function loadWorkingCard(cardId: string, { idle = false } = {}) {
 
 /** A working card is on the shared branch once its start commit is recorded. */
 const isShared = (card: { startSha: string | null }) => Boolean(card.startSha);
+
+function checksOf(card: { checksStatus: string | null; checksJson: string | null }) {
+  const status = checksStatusSchema.safeParse(card.checksStatus);
+  return status.success ? { status: status.data, checks: parseJson(card.checksJson ?? '[]', checkSummarySchema, []) } : null;
+}
+
+/** Failing checks: push and pull request ask "push anyway" each time, like the high-risk confirmation. */
+function assertChecksConfirmed(card: { checksStatus: string | null; checksJson: string | null }, confirmed: boolean) {
+  const checks = checksOf(card);
+  if (checks?.status !== 'FAILED' || confirmed) return;
+  throw new HttpError(
+    409,
+    `The project's checks are failing (${failingNames(checks.checks) || 'see the Checks tab'}). Look at them first, then confirm to push anyway.`,
+    'CHECKS_FAILING',
+  );
+}
 
 const sharedOnly = () =>
   new HttpError(409, 'This card works on the project’s shared branch: there is no card branch to update or clean up.', 'GIT_ERROR');
@@ -83,10 +101,10 @@ async function cleanupCard(card: {
   return { removedWorktree: Boolean(card.worktreePath), deletedBranch, keptBranchReason };
 }
 
-/** The reviewer summary from the latest finished run (the agent's final message). */
+/** The reviewer summary from the latest finished run (the agent's final message); fix rounds only fix the checks. */
 async function latestSummary(cardId: string) {
   const run = await prisma.run.findFirst({
-    where: { cardId, status: 'SUCCEEDED', summary: { not: null } },
+    where: { cardId, status: 'SUCCEEDED', summary: { not: null }, kind: { in: ['INITIAL', 'FOLLOW_UP'] } },
     orderBy: { createdAt: 'desc' },
     select: { summary: true },
   });
@@ -120,9 +138,11 @@ export const cardGitService = {
       .join('\n\n');
     // spec §8.5: summary, Trello link, "Generated with Claude Code, reviewed by {user}".
     const risk = riskService.parse(card.riskLevel, card.riskJson);
+    const checks = checksOf(card);
     const body = [
       summary || '_No summary._',
       risk ? riskMarkdown(risk) : null,
+      checks && checks.status !== 'RUNNING' ? checksMarkdown(checks.status, checks.checks) : null,
       `**Trello:** ${card.trelloUrl}`,
       `---\nGenerated with Claude Code via Ticket2PR${reviewer ? `, reviewed by ${reviewer}` : ''}.`,
     ]
@@ -158,8 +178,9 @@ export const cardGitService = {
   },
 
   /** Branch-per-card: pushes the card branch. Shared branch: pushes the branch and the card is Done. */
-  async push(cardId: string, input: Required<PushInput> = { riskReviewed: false }) {
+  async push(cardId: string, input: Required<PushInput> = { riskReviewed: false, checksFailingConfirmed: false }) {
     const card = await loadWorkingCard(cardId, { idle: true });
+    assertChecksConfirmed(card, input.checksFailingConfirmed);
     await riskService.assertReviewed(card, input.riskReviewed);
     const status = await getBranchStatus(card.worktreePath, card.project.baseBranch, card.branchName, card.startSha);
     if (!status.hasRemote) throw new HttpError(409, 'This repository has no origin remote to push to.', 'GIT_ERROR');
@@ -220,6 +241,7 @@ export const cardGitService = {
       throw new HttpError(409, 'This project works on one shared branch: push it instead of opening a pull request per card.', 'GIT_ERROR');
     }
     if (card.prUrl) return { prUrl: card.prUrl, compareUrl: null };
+    assertChecksConfirmed(card, input.checksFailingConfirmed);
     const risk = await riskService.assertReviewed(card, input.riskReviewed);
     const [status, origin, settings] = await Promise.all([
       getBranchStatus(card.worktreePath, card.project.baseBranch, card.branchName),

@@ -1,4 +1,5 @@
-import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { AgentUsage } from '~/lib/usage';
 import type { RunEventPayload } from '~/types/run';
 import type { UsageReport } from '~/server/modules/claude/usage.service';
 
@@ -9,10 +10,11 @@ import type { UsageReport } from '~/server/modules/claude/usage.service';
 export type ClaudeResult = {
   summary: string;
   numTurns: number;
-  costUsd: number;
   durationMs: number;
   isError: boolean;
   error: string | null;
+  /** Tokens and API-equivalent cost, as reported: for a resumed session, it may include the session's earlier runs. */
+  usage: AgentUsage;
 };
 
 export type MappedMessage = {
@@ -47,6 +49,39 @@ function formatReset(epochSeconds: number | undefined) {
   if (!epochSeconds) return '';
   const d = new Date(epochSeconds * 1000);
   return ` It resets at ${d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}.`;
+}
+
+/** Floating-point noise out of reported costs (micro-dollars are plenty). */
+const roundCost = (usd: number) => Math.round(usd * 1e6) / 1e6;
+
+/**
+ * Tokens and API-equivalent cost of a result. `modelUsage` covers every model
+ * call (subagents and compaction too); `usage` (main loop only) is the
+ * fallback when it is missing.
+ */
+export function usageOfResult(msg: Pick<SDKResultMessage, 'modelUsage' | 'usage' | 'total_cost_usd'>): AgentUsage {
+  const models = Object.entries(msg.modelUsage ?? {}).sort(([, a], [, b]) => b.costUSD - a.costUSD);
+  if (models.length) {
+    const sum = (key: 'inputTokens' | 'outputTokens' | 'cacheReadInputTokens' | 'cacheCreationInputTokens') =>
+      models.reduce((n, [, m]) => n + (m[key] ?? 0), 0);
+    return {
+      inputTokens: sum('inputTokens'),
+      outputTokens: sum('outputTokens'),
+      cacheReadTokens: sum('cacheReadInputTokens'),
+      cacheWriteTokens: sum('cacheCreationInputTokens'),
+      costUsd: roundCost(msg.total_cost_usd ?? models.reduce((n, [, m]) => n + m.costUSD, 0)),
+      models: models.map(([name]) => name),
+    };
+  }
+  const u = msg.usage;
+  return {
+    inputTokens: u?.input_tokens ?? 0,
+    outputTokens: u?.output_tokens ?? 0,
+    cacheReadTokens: u?.cache_read_input_tokens ?? 0,
+    cacheWriteTokens: u?.cache_creation_input_tokens ?? 0,
+    costUsd: roundCost(msg.total_cost_usd ?? 0),
+    models: [],
+  };
 }
 
 export function mapSdkMessage(msg: SDKMessage): MappedMessage {
@@ -120,10 +155,10 @@ export function mapSdkMessage(msg: SDKMessage): MappedMessage {
           result: {
             summary: msg.result?.trim() ?? '',
             numTurns: msg.num_turns,
-            costUsd: msg.total_cost_usd,
             durationMs: msg.duration_ms,
             isError: msg.is_error,
             error: msg.is_error ? msg.result?.trim() || 'Claude Code reported an error.' : null,
+            usage: usageOfResult(msg),
           },
           events: [],
         };
@@ -135,7 +170,14 @@ export function mapSdkMessage(msg: SDKMessage): MappedMessage {
             ? 'Stopped: the budget for this run was reached.'
             : msg.errors?.filter(Boolean).join('\n') || 'Claude Code stopped with an error.';
       return {
-        result: { summary: '', numTurns: msg.num_turns, costUsd: msg.total_cost_usd, durationMs: msg.duration_ms, isError: true, error },
+        result: {
+          summary: '',
+          numTurns: msg.num_turns,
+          durationMs: msg.duration_ms,
+          isError: true,
+          error,
+          usage: usageOfResult(msg),
+        },
         events: [],
       };
     }

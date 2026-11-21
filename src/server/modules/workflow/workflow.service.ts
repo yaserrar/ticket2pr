@@ -22,6 +22,7 @@ import { removeScreenshots } from '~/server/modules/preview/preview.service';
 import { scopeGate, scopeStatusSchema } from '~/lib/scope';
 import { scopeService } from '~/server/modules/scope/scope.service';
 import { scopeContentKey } from '~/server/modules/scope/scope-content';
+import { enabledChecks } from '~/server/modules/checks/checks.service';
 
 /**
  * The card state machine (spec §9). Every status change goes through here:
@@ -286,6 +287,23 @@ export const workflowService = {
   },
 
   /**
+   * Run the project's checks again on the card's folder, without Claude (the
+   * developer fixed something by hand). Queued like a run; never moves the card.
+   */
+  async requestChecks(cardId: string) {
+    const card = await loadCard(cardId);
+    if (card.status !== 'IN_PROGRESS' && card.status !== 'REVIEW') throw invalidTransition('Checks run on cards In progress or in Review.');
+    if (activeRunOf(card)) throw invalidTransition('This card already has a run in progress.');
+    if (!enabledChecks(card.project).length) {
+      throw new HttpError(409, 'This project has no checks. Turn them on in Project settings.', 'CONFLICT');
+    }
+    if (!(await isWorktree(card.worktreePath))) throw invalidTransition('This card has no folder yet: its first run creates it.');
+    await prisma.run.create({ data: { cardId, kind: 'CHECKS', runner: runnerName(), prompt: '' } });
+    void kickQueue();
+    return cardsService.get(cardId);
+  },
+
+  /**
    * Discard work (spec §8.6): stop the run, remove the worktree, delete the
    * branch, back to New. On a shared branch: throw away the uncommitted
    * changes only (commits, the branch and the folder stay). Run history is kept.
@@ -332,6 +350,8 @@ export const workflowService = {
         previewPagesJson: null,
         screenshotsJson: null,
         screenshotError: null,
+        checksStatus: null,
+        checksJson: null,
       },
     });
     await removeAttachments(cardId);

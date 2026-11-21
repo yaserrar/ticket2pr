@@ -21,7 +21,7 @@ describe('updateSettingsBody', () => {
 });
 
 describe('projectBody', () => {
-  const repo = { repoPath: '', baseBranch: 'main', setupCommand: '', extraInstructions: '', workMode: 'BRANCH_PER_CARD' as const, sharedBranch: '', sharedInRepo: true, trelloInProgressListId: null, trelloReviewListId: null, trelloDoneListId: null, trelloNeedsInfoListId: null, scopeCheck: false, scopeRules: '', trelloOutOfScopeListId: null, riskPaths: '', previewEnabled: false, previewCommand: '', previewUrl: '' };
+  const repo = { repoPath: '', baseBranch: 'main', setupCommand: '', extraInstructions: '', workMode: 'BRANCH_PER_CARD' as const, sharedBranch: '', sharedInRepo: true, trelloInProgressListId: null, trelloReviewListId: null, trelloDoneListId: null, trelloNeedsInfoListId: null, scopeCheck: false, scopeRules: '', trelloOutOfScopeListId: null, riskPaths: '', previewEnabled: false, previewCommand: '', previewUrl: '', checksEnabled: false, checks: [], checksAutoFix: true, checksMaxFixRounds: 2 };
 
   it('explains a missing board before an invalid id', () => {
     const result = projectBody.safeParse({ ...repo, name: 'Site', trelloBoardId: '', trelloSourceListId: '' });
@@ -41,6 +41,17 @@ describe('projectBody', () => {
     expect(noCommand.error?.issues[0]?.path).toEqual(['previewCommand']);
     expect(projectBody.safeParse({ ...base, previewEnabled: true, previewCommand: 'npm run dev', previewUrl: 'https://example.com' }).success).toBe(false);
     expect(projectBody.safeParse({ ...base, previewEnabled: true, previewCommand: 'npm run dev', previewUrl: 'http://localhost:$PORT/app' }).success).toBe(true);
+  });
+
+  it('needs at least one check when checks are on, each with a name, a command and a timeout', () => {
+    const id = '5abbe4b7ddc1b351ef961414';
+    const base = { ...repo, name: 'Site', trelloBoardId: id, trelloSourceListId: id };
+    expect(projectBody.safeParse({ ...base, checksEnabled: true }).error?.issues[0]?.path).toEqual(['checks']);
+    const check = { name: 'Tests', command: 'npm test', timeoutMin: 10 };
+    expect(projectBody.safeParse({ ...base, checksEnabled: true, checks: [check] }).success).toBe(true);
+    const bad = projectBody.safeParse({ ...base, checksEnabled: true, checks: [{ ...check, command: ' ', timeoutMin: 0 }] });
+    expect(bad.error?.issues.map((i) => i.path.join('.'))).toEqual(['checks.0.command', 'checks.0.timeoutMin']);
+    expect(projectBody.safeParse({ ...base, checksMaxFixRounds: 9 }).success).toBe(false);
   });
 });
 

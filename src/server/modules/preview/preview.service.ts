@@ -50,18 +50,25 @@ function freePort(): Promise<number> {
   });
 }
 
-/** Stops the app and everything it started (its own process group). */
-function stop(child: ChildProcess) {
-  if (child.exitCode !== null || !child.pid) return;
+/**
+ * Stops a command started with `detached: true` and everything it started
+ * (its own process group). The group is signalled even when its first
+ * process has already ended: what it left running (a server, a watcher) is
+ * still in the group. SIGKILL follows for anything that ignored SIGTERM.
+ */
+export function stopProcessTree(child: ChildProcess) {
+  const pid = child.pid;
+  if (!pid) return;
   const kill = (signal: NodeJS.Signals) => {
     try {
-      process.kill(-child.pid!, signal);
+      process.kill(-pid, signal);
     } catch {
-      child.kill(signal);
+      // ESRCH: nothing left in the group.
+      if (child.exitCode === null && child.signalCode === null) child.kill(signal);
     }
   };
   kill('SIGTERM');
-  setTimeout(() => child.exitCode === null && kill('SIGKILL'), 3_000).unref();
+  setTimeout(() => kill('SIGKILL'), 3_000).unref();
 }
 
 async function waitUntilUp(url: string, child: ChildProcess, output: () => string, signal?: AbortSignal) {
@@ -171,7 +178,7 @@ export async function takeScreenshots(input: TakeScreenshotsInput): Promise<Scre
     return shots;
   } finally {
     await browser?.close().catch(() => undefined);
-    stop(child);
+    stopProcessTree(child);
   }
 }
 

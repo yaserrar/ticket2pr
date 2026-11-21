@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { checkConfigsSchema, MAX_FIX_ROUNDS } from '~/lib/checks';
+import { usagePeriodSchema } from '~/lib/usage';
 import { idSchema, syncTriggerSchema, trelloIdSchema } from './common';
 
 export const WORK_MODES = ['BRANCH_PER_CARD', 'SHARED_BRANCH'] as const;
@@ -59,12 +61,27 @@ export const projectBody = z.object({
     .trim()
     .max(300)
     .refine((v) => !v || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(v), 'Use a local address, like http://localhost:$PORT'),
-}).refine((v) => !v.previewEnabled || v.previewCommand.length > 0, { path: ['previewCommand'], message: 'Give the command that starts the app' });
+  /** Checks before review: run the commands below in the card's folder after each run. */
+  checksEnabled: z.boolean(),
+  /** Shell commands the developer configures (never taken from card text). */
+  checks: checkConfigsSchema,
+  /** A failing check goes back to Claude with its output, up to `checksMaxFixRounds` times. */
+  checksAutoFix: z.boolean(),
+  checksMaxFixRounds: z.number().int().min(1).max(MAX_FIX_ROUNDS),
+})
+  .refine((v) => !v.previewEnabled || v.previewCommand.length > 0, { path: ['previewCommand'], message: 'Give the command that starts the app' })
+  .refine((v) => !v.checksEnabled || v.checks.length > 0, { path: ['checks'], message: 'Add a check, or turn checks off' });
 export type ProjectInput = z.infer<typeof projectBody>;
 
 export const validateRepoBody = z.object({ repoPath: z.string().trim().min(1, 'Type the repository path').max(1000) });
 
+/** `POST /api/projects/check-suggestions`: typecheck, lint and tests found in the repository. */
+export const checkSuggestionsBody = validateRepoBody;
+
 export const projectParams = z.object({ projectId: idSchema });
+
+/** `GET /api/projects/{id}/usage?period=` (and its CSV). */
+export const usageQuery = z.object({ period: usagePeriodSchema.catch('month') });
 
 export const syncBody = z.object({ trigger: syncTriggerSchema.default('MANUAL') });
 export type SyncInput = z.input<typeof syncBody>;

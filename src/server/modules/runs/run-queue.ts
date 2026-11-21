@@ -3,6 +3,7 @@ import { prisma } from '~/server/config/prisma';
 import { logger } from '~/server/config/logger';
 import { settingsService } from '~/server/modules/settings/settings.service';
 import { usageService } from '~/server/modules/claude/usage.service';
+import { checksService } from '~/server/modules/checks/checks.service';
 import { executeRun } from './run-executor';
 import { runRegistry } from './run-registry';
 
@@ -63,7 +64,7 @@ async function fillSlots() {
   }
 }
 
-/** On server start: runs left RUNNING by a previous process are INTERRUPTED (spec §7.5). */
+/** On server start: runs left RUNNING by a previous process are INTERRUPTED (spec §7.5), their checks stopped. */
 export async function recoverRuns() {
   const interrupted = await prisma.run.updateMany({
     // Runs still registered in this process (dev reloads) are genuinely running.
@@ -71,5 +72,6 @@ export async function recoverRuns() {
     data: { status: 'INTERRUPTED', error: 'The server stopped during this run.', endedAt: new Date() },
   });
   if (interrupted.count) logger.warn({ count: interrupted.count }, 'Marked interrupted runs');
+  await checksService.recover();
   await kickQueue();
 }

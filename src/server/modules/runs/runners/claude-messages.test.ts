@@ -72,10 +72,48 @@ describe('mapSdkMessage', () => {
     const ok = mapSdkMessage(
       m({ type: 'result', subtype: 'success', result: 'Changed the link.', num_turns: 4, total_cost_usd: 0.12, duration_ms: 30000, is_error: false }),
     );
-    expect(ok.result).toEqual({ summary: 'Changed the link.', numTurns: 4, costUsd: 0.12, durationMs: 30000, isError: false, error: null });
+    expect(ok.result).toEqual({
+      summary: 'Changed the link.',
+      numTurns: 4,
+      durationMs: 30000,
+      isError: false,
+      error: null,
+      usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0.12, models: [] },
+    });
 
     const turns = mapSdkMessage(m({ type: 'result', subtype: 'error_max_turns', num_turns: 60, total_cost_usd: 1, duration_ms: 1, errors: [] }));
     expect(turns.result).toMatchObject({ isError: true, error: expect.stringContaining('60 turns') });
+  });
+
+  it('sums tokens over every model, most expensive model first', () => {
+    const model = (costUSD: number, tokens: number) => ({
+      inputTokens: tokens,
+      outputTokens: tokens * 10,
+      cacheReadInputTokens: tokens * 100,
+      cacheCreationInputTokens: tokens * 20,
+      costUSD,
+    });
+    const out = mapSdkMessage(
+      m({
+        type: 'result',
+        subtype: 'success',
+        result: 'Done.',
+        num_turns: 9,
+        total_cost_usd: 0.91,
+        duration_ms: 1,
+        is_error: false,
+        usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 1, cache_creation_input_tokens: 1 },
+        modelUsage: { 'claude-haiku-4-5': model(0.01, 10), 'claude-sonnet-4-5': model(0.9, 100) },
+      }),
+    );
+    expect(out.result?.usage).toEqual({
+      inputTokens: 110,
+      outputTokens: 1100,
+      cacheReadTokens: 11_000,
+      cacheWriteTokens: 2200,
+      costUsd: 0.91,
+      models: ['claude-sonnet-4-5', 'claude-haiku-4-5'],
+    });
   });
 
   it('ignores messages it does not need', () => {

@@ -6,6 +6,7 @@ import { logger } from '~/server/config/logger';
 import { claudeEnv, claudeExecutable, explainClaudeError } from '~/server/modules/claude/claude.client';
 import { settingsService } from '~/server/modules/settings/settings.service';
 import { UsageLimitError } from '~/server/modules/claude/usage.service';
+import { usageDelta } from '~/lib/usage';
 import { mapSdkMessage, type ClaudeResult } from './claude-messages';
 import { buildToolPolicy, denialMessage, detectPackageManager } from './tool-policy';
 import type { Runner } from './types';
@@ -124,9 +125,10 @@ export const claudeRunner: Runner = async (ctx) => {
   return {
     summary: result.summary || lastText || '(Claude gave no summary.)',
     numTurns: result.numTurns,
-    costUsd: result.costUsd,
     sessionId,
     isError: result.isError,
     error: result.error,
+    usage: usageDelta(result.usage, ctx.resumeSessionId ? ctx.sessionUsage : null),
+    sessionUsage: result.usage,
   };
 };

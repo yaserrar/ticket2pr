@@ -12,7 +12,9 @@
  *   push and other branch-changing git, network tools, web tools, questions.
  * - Anything else that would need approval is refused by `canUseTool`.
  */
-export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
+import type { PackageManager } from '~/lib/checks';
+
+export type { PackageManager };
 
 const SAFE_SCRIPTS = ['test', 'test:unit', 'lint', 'lint:fix', 'typecheck', 'type-check', 'check', 'build', 'format', 'format:check'];
 

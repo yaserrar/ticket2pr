@@ -22,10 +22,21 @@ export const notificationsService = {
         take: 20,
         select: {
           id: true,
+          kind: true,
           status: true,
           error: true,
           endedAt: true,
-          card: { select: { id: true, title: true, projectId: true, clientQuestions: true, project: { select: { name: true } } } },
+          card: {
+            select: {
+              id: true,
+              title: true,
+              projectId: true,
+              clientQuestions: true,
+              checksStatus: true,
+              project: { select: { name: true } },
+              runs: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, kind: true } },
+            },
+          },
         },
       }),
       prisma.card.findMany({
@@ -50,12 +61,22 @@ export const notificationsService = {
         paused = true;
         continue;
       }
+      // Checks run on request, and runs whose failing checks went back to Claude: the card isn't ready yet.
+      const fixFollows = run.card.runs[0]?.id !== run.id && run.card.runs[0]?.kind === 'FIX';
+      if (run.kind === 'CHECKS' || (run.status === 'SUCCEEDED' && fixFollows)) continue;
       if (run.status === 'FAILED') {
         events.push({ ...base, id: `run-${run.id}`, kind: 'RUN_FAILED', title: `Run failed: ${run.card.title}`, body: run.error ?? run.card.project.name });
       } else if (run.card.clientQuestions) {
         events.push({ ...base, id: `run-${run.id}`, kind: 'QUESTIONS', title: `Claude has questions: ${run.card.title}`, body: 'Review them and ask the client on Trello.' });
       } else {
-        events.push({ ...base, id: `run-${run.id}`, kind: 'RUN_SUCCEEDED', title: `Ready for review: ${run.card.title}`, body: run.card.project.name });
+        const failing = run.card.checksStatus === 'FAILED';
+        events.push({
+          ...base,
+          id: `run-${run.id}`,
+          kind: 'RUN_SUCCEEDED',
+          title: `${failing ? 'Ready for review, checks failing' : 'Ready for review'}: ${run.card.title}`,
+          body: run.card.project.name,
+        });
       }
     }
     for (const card of replies) {

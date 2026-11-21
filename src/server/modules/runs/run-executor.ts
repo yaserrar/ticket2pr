@@ -8,13 +8,15 @@ import { UsageLimitError, usageService } from '~/server/modules/claude/usage.ser
 import { attachmentsDir, cardContextService } from '~/server/modules/trello/card-context.service';
 import { postedIdsOf, writeBackService } from '~/server/modules/trello/write-back.service';
 import { splitSummary } from '~/lib/summary';
-import { formatTime } from '~/lib/format';
+import { formatDuration, formatTime } from '~/lib/format';
+import { parseUsage, tokensOf } from '~/lib/usage';
+import { checksService, enabledChecks, type ChecksOutcome } from '~/server/modules/checks/checks.service';
 import type { Card, Run } from '~/generated/prisma/client';
 import type { RunEventPayload, RunKind } from '~/types/run';
-import { buildResumePrompt } from './prompt';
+import { buildFixPrompt, buildResumePrompt } from './prompt';
 import { riskService } from '~/server/modules/risk/risk.service';
 import { RISK_META } from '~/lib/risk';
-import { cardPreviewService } from '~/server/modules/preview/card-preview.service';
+import { cardPreviewService, parsePages } from '~/server/modules/preview/card-preview.service';
 import { appendRunEvent, endRunStream } from './run-events';
 import { runRegistry } from './run-registry';
 import { getRunner, runnerName } from './runners';
@@ -22,26 +24,33 @@ import { contentChanges, contentOf, parseContent, renderFollowUpContext, renderI
 
 const POSITION_STEP = 1000;
 
+const KIND_LABEL: Record<RunKind, string> = { INITIAL: 'initial', FOLLOW_UP: 'follow-up', FIX: 'fix round', CHECKS: 'checks only' };
+
 /**
  * Executes one claimed run (status already RUNNING, registered with its
  * AbortController): prepare the worktree (first time) → run the setup command
- * → add the Trello context → run the agent → store the result → move the
- * card to Review on success. At the Claude usage limit the queue pauses and
- * the card continues automatically after the reset. Always ends the stream
- * and frees the slot for the next queued run.
+ * → add the Trello context → run the agent → run the project's checks → store
+ * the result → move the card to Review on success. Failing checks go back to
+ * Claude in a fix run (same session, same slot) while rounds remain; still
+ * failing, the card reaches Review flagged. At the Claude usage limit the
+ * queue pauses and the card continues automatically after the reset. Always
+ * ends the stream and frees the slot for the next queued run.
  */
 export async function executeRun(runId: string, controller: AbortController, onSettled: () => void) {
   const started = Date.now();
   const emit = (event: RunEventPayload) => appendRunEvent(runId, event);
   let succeeded = false;
   let basePrompt: string | null = null;
+  let fixRunId: string | null = null;
 
   try {
     const run = await prisma.run.findUniqueOrThrow({ where: { id: runId }, include: { card: { include: { project: true } } } });
     const { card } = run;
     const { project } = card;
+    const kind = run.kind as RunKind;
     basePrompt = run.prompt;
-    await emit({ type: 'system', message: `Run started (${run.kind === 'FOLLOW_UP' ? 'follow-up' : 'initial'}, ${runnerName()} runner)` });
+    const label = kind === 'FIX' ? `fix round ${run.fixRound ?? 1}` : KIND_LABEL[kind];
+    await emit({ type: 'system', message: `Run started (${label}, ${runnerName()} runner)` });
 
     if (!project.repoPath) throw new Error('This project has no repository. Add it in Project settings.');
 
@@ -67,15 +76,39 @@ export async function executeRun(runId: string, controller: AbortController, onS
       await runSetupCommand(project.setupCommand, worktree.worktreePath, (message) => emit({ type: 'info', message }), controller.signal);
     }
 
-    const prompt = run.prompt + (await trelloContext(run, card, log));
+    const checks = enabledChecks(project);
+    const runChecks = () =>
+      checksService.run({
+        runId,
+        cardId: card.id,
+        folder: worktree.worktreePath,
+        repoPath: project.repoPath!,
+        checks,
+        signal: controller.signal,
+        emit,
+      });
+
+    // The checks alone, on request (the developer changed the code by hand).
+    if (kind === 'CHECKS') {
+      if (!checks.length) throw new Error('This project has no checks. Add them in Project settings.');
+      await logChecks(await runChecks(), log);
+      await prisma.run.update({ where: { id: runId }, data: { status: 'SUCCEEDED', durationMs: Date.now() - started, endedAt: new Date() } });
+      return;
+    }
+
+    const fix = kind === 'FIX';
+    const prompt = fix ? run.prompt : run.prompt + (await trelloContext(run, card, log));
     if (prompt !== run.prompt) await prisma.run.update({ where: { id: runId }, data: { prompt } });
     const dir = attachmentsDir(card.id);
+    const resumeSessionId = kind === 'FOLLOW_UP' || fix ? card.lastSessionId : null;
 
     const result = await getRunner()({
       runId,
-      kind: run.kind as RunKind,
+      kind,
       prompt,
-      resumeSessionId: run.kind === 'FOLLOW_UP' ? card.lastSessionId : null,
+      resumeSessionId,
+      sessionUsage: resumeSessionId ? await sessionUsageOf(card.id, resumeSessionId) : null,
+      fixRound: run.fixRound,
       card: { shortLink: card.trelloShortLink, title: card.title, description: card.description, trelloUrl: card.trelloUrl },
       worktreePath: worktree.worktreePath,
       attachmentsDir: existsSync(dir) ? dir : null,
@@ -85,44 +118,96 @@ export async function executeRun(runId: string, controller: AbortController, onS
     });
     if (controller.signal.aborted) throw new Error('Run stopped');
 
-    const durationMs = Date.now() - started;
-    await emit({
-      type: 'result',
-      summary: result.summary,
-      numTurns: result.numTurns,
-      durationMs,
-      costUsd: result.costUsd,
-      isError: result.isError,
-      costIsEstimate: runnerName() === 'claude',
-    });
-    succeeded = !result.isError;
-    const sections = splitSummary(result.summary);
-    if (succeeded) await afterChanges({ runId, cardId: card.id, previewPages: sections.previewPages, log, signal: controller.signal });
+    // Claude's part is stored now, so stopping during the checks keeps it.
+    const { usage } = result;
     await prisma.$transaction([
       prisma.run.update({
         where: { id: runId },
         data: {
-          status: succeeded ? 'SUCCEEDED' : 'FAILED',
           summary: result.summary,
-          error: succeeded ? null : (result.error ?? 'The agent reported an error.'),
-          costUsd: result.costUsd,
-          numTurns: result.numTurns,
-          durationMs,
           sessionId: result.sessionId,
-          endedAt: new Date(),
+          numTurns: result.numTurns,
+          costUsd: usage.costUsd,
+          model: usage.models.join(', ') || null,
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          cacheReadTokens: usage.cacheReadTokens,
+          cacheWriteTokens: usage.cacheWriteTokens,
+          sessionUsageJson: JSON.stringify(result.sessionUsage),
         },
       }),
-      prisma.card.update({
-        where: { id: card.id },
-        data: {
-          lastSessionId: result.sessionId,
-          ...(succeeded
-            ? { clientQuestions: sections.questions, clientUpdate: sections.clientUpdate, clientUpdatePostedAt: null }
-            : {}),
-        },
-      }),
+      prisma.card.update({ where: { id: card.id }, data: { lastSessionId: result.sessionId } }),
+    ]);
+    await emit({
+      type: 'result',
+      summary: result.summary,
+      numTurns: result.numTurns,
+      durationMs: Date.now() - started,
+      costUsd: usage.costUsd,
+      isError: result.isError,
+      costIsEstimate: runnerName() === 'claude',
+      tokens: tokensOf(usage),
+    });
+    if (result.isError) {
+      await prisma.run.update({
+        where: { id: runId },
+        data: { status: 'FAILED', error: result.error ?? 'The agent reported an error.', durationMs: Date.now() - started, endedAt: new Date() },
+      });
+      return;
+    }
+
+    const sections = splitSummary(result.summary);
+    // A fix round keeps the client texts and pages of the work it fixes, unless it wrote new ones.
+    const clientTexts = fix
+      ? sections.clientUpdate
+        ? { clientUpdate: sections.clientUpdate, clientUpdatePostedAt: null }
+        : {}
+      : { clientQuestions: sections.questions, clientUpdate: sections.clientUpdate, clientUpdatePostedAt: null };
+    const previewPages = fix && !sections.previewPages.length ? parsePages(card.previewPagesJson) : sections.previewPages;
+
+    let outcome: ChecksOutcome | null = null;
+    if (checks.length && sections.questions && !fix) await log('Checks skipped: Claude asked the client questions instead of changing the code.');
+    else if (checks.length) {
+      outcome = await runChecks();
+      await logChecks(outcome, log);
+    }
+
+    const round = fix ? (run.fixRound ?? 1) : 0;
+    if (outcome?.status === 'FAILED' && project.checksAutoFix && round < project.checksMaxFixRounds) {
+      const next = round + 1;
+      await log(`Sending the failing output back to Claude: fix round ${next} of ${project.checksMaxFixRounds}.`);
+      const [fixRun] = await prisma.$transaction([
+        prisma.run.create({
+          data: {
+            cardId: card.id,
+            kind: 'FIX',
+            fixRound: next,
+            runner: runnerName(),
+            prompt: buildFixPrompt(outcome.failed, { round: next, maxRounds: project.checksMaxFixRounds, previewPages: project.previewEnabled }),
+          },
+        }),
+        prisma.run.update({ where: { id: runId }, data: { status: 'SUCCEEDED', durationMs: Date.now() - started, endedAt: new Date() } }),
+        prisma.card.update({ where: { id: card.id }, data: { ...clientTexts, previewPagesJson: JSON.stringify(previewPages) } }),
+      ]);
+      fixRunId = fixRun.id;
+      return;
+    }
+    if (outcome?.status === 'FAILED') {
+      await log(
+        project.checksAutoFix && round > 0
+          ? `Checks still failing after ${round} fix round${round === 1 ? '' : 's'}. The card goes to Review flagged “Checks failing”.`
+          : 'The card goes to Review flagged “Checks failing”.',
+      );
+    }
+
+    succeeded = true;
+    await afterChanges({ runId, cardId: card.id, previewPages, log, signal: controller.signal });
+    await prisma.$transaction([
+      prisma.run.update({ where: { id: runId }, data: { status: 'SUCCEEDED', error: null, durationMs: Date.now() - started, endedAt: new Date() } }),
+      prisma.card.update({ where: { id: card.id }, data: clientTexts }),
     ]);
   } catch (error) {
+    succeeded = false;
     const cancelled = controller.signal.aborted;
     if (!cancelled && error instanceof UsageLimitError) {
       await pauseAndRequeue(runId, error, basePrompt, started).catch((err) => logger.error({ err, runId }, 'Re-queueing after the usage limit failed'));
@@ -138,11 +223,50 @@ export async function executeRun(runId: string, controller: AbortController, onS
         .catch(() => undefined);
     }
   } finally {
+    const next = fixRunId ? await claimFixRun(fixRunId, controller.signal).catch(() => null) : null;
     runRegistry.unregister(runId);
     if (succeeded) await moveToReview(runId).catch((err) => logger.error({ err, runId }, 'Moving the card to Review failed'));
     await endRunStream(runId);
-    onSettled();
+    if (next && fixRunId) void executeRun(fixRunId, next, onSettled);
+    else onSettled();
   }
+}
+
+/**
+ * The fix run starts right away in the slot this run frees, so the session
+ * is still warm and other queued cards don't slip in between. Stopped during
+ * the hand-over: it is cancelled. Usage limit: it waits in the queue.
+ */
+async function claimFixRun(fixRunId: string, signal: AbortSignal): Promise<AbortController | null> {
+  if (signal.aborted) {
+    await prisma.run.updateMany({ where: { id: fixRunId, status: 'QUEUED' }, data: { status: 'CANCELLED', error: 'Stopped by you.', endedAt: new Date() } });
+    return null;
+  }
+  if (await usageService.pausedUntil()) return null;
+  const claimed = await prisma.run.updateMany({ where: { id: fixRunId, status: 'QUEUED' }, data: { status: 'RUNNING', startedAt: new Date() } });
+  if (!claimed.count) return null;
+  const controller = new AbortController();
+  runRegistry.register(fixRunId, controller);
+  return controller;
+}
+
+/** The session's usage as last reported, for the resumed run to tell its own part. */
+async function sessionUsageOf(cardId: string, sessionId: string) {
+  const last = await prisma.run.findFirst({
+    where: { cardId, sessionId, sessionUsageJson: { not: null } },
+    orderBy: { createdAt: 'desc' },
+    select: { sessionUsageJson: true },
+  });
+  return parseUsage(last?.sessionUsageJson);
+}
+
+async function logChecks(outcome: ChecksOutcome, log: (message: string) => Promise<void>) {
+  const time = formatDuration(outcome.durationMs);
+  await log(
+    outcome.status === 'PASSED'
+      ? `Checks passed (${time}).`
+      : `Checks failing: ${outcome.failed.map((f) => `${f.name}${f.status === 'TIMED_OUT' ? ' (timed out)' : ''}`).join(', ')} (${time}).`,
+  );
 }
 
 /**
@@ -223,13 +347,17 @@ async function pauseAndRequeue(runId: string, error: UsageLimitError, basePrompt
   const resume = Boolean(error.sessionId);
   await prisma.$transaction([
     ...(resume ? [prisma.card.update({ where: { id: run.cardId }, data: { lastSessionId: error.sessionId } })] : []),
+    // A fix round stays one (same round, same failing output to fix).
     prisma.run.create({
-      data: {
-        cardId: run.cardId,
-        kind: resume ? 'FOLLOW_UP' : run.kind,
-        runner: run.runner,
-        prompt: resume ? buildResumePrompt() : (basePrompt ?? run.prompt),
-      },
+      data:
+        run.kind === 'FIX'
+          ? { cardId: run.cardId, kind: 'FIX', fixRound: run.fixRound, runner: run.runner, prompt: basePrompt ?? run.prompt }
+          : {
+              cardId: run.cardId,
+              kind: resume ? 'FOLLOW_UP' : run.kind,
+              runner: run.runner,
+              prompt: resume ? buildResumePrompt() : (basePrompt ?? run.prompt),
+            },
     }),
   ]);
 }

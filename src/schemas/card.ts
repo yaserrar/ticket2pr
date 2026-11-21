@@ -41,12 +41,15 @@ export const pullRequestBody = z.object({
 });
 export type PullRequestInput = z.input<typeof pullRequestBody>;
 
-/** `POST /api/cards/{id}/pr`: the form, plus "I reviewed the high-risk files" (required once when the changes are high risk). */
-export const openPrBody = pullRequestBody.extend({ riskReviewed: z.boolean().default(false) });
+/**
+ * `POST /api/cards/{id}/pr`: the form, plus "I reviewed the high-risk files" (required once when the changes are
+ * high risk) and "push anyway" when the project's checks are failing (required each time).
+ */
+export const openPrBody = pullRequestBody.extend({ riskReviewed: z.boolean().default(false), checksFailingConfirmed: z.boolean().default(false) });
 export type OpenPrInput = z.input<typeof openPrBody>;
 
 /** `POST /api/cards/{id}/push`. */
-export const pushBody = z.object({ riskReviewed: z.boolean().default(false) });
+export const pushBody = z.object({ riskReviewed: z.boolean().default(false), checksFailingConfirmed: z.boolean().default(false) });
 export type PushInput = z.input<typeof pushBody>;
 
 /** Post on the Trello card: the plain-language update, or the questions for the client. */
