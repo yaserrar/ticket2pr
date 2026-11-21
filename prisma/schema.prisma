@@ -59,6 +59,10 @@ model Project {
   previewEnabled         Boolean   @default(false) // screenshots of UI changes for the client
   previewCommand         String? // starts the app in the card's folder, e.g. "npm run dev -- --port $PORT"
   previewUrl             String? // where it answers, e.g. "http://localhost:$PORT"
+  checksEnabled          Boolean   @default(false) // run the project's checks after each run, before Review
+  checksJson             String? // [{ name, command, timeoutMin }]: shell commands the developer configured
+  checksAutoFix          Boolean   @default(true) // a failing check sends its output back to Claude (same session)
+  checksMaxFixRounds     Int       @default(2)
   lastSyncedAt           DateTime?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
@@ -119,6 +123,9 @@ model Card {
   previewPagesJson     String? // pages Claude said show the change: ["/contact"]
   screenshotsJson      String? // [{ file, page, takenAt }]
   screenshotError      String?
+  // Checks of the card's latest work (the board badge; details per run in run_checks).
+  checksStatus         String? // null (none ran) | RUNNING | PASSED | FAILED | STOPPED
+  checksJson           String? // [{ name, status }]
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   runs                 Run[]
@@ -134,20 +141,31 @@ model Run {
   id         String     @id @default(cuid())
   cardId     String
   card       Card       @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  kind       String     @default("INITIAL") // INITIAL | FOLLOW_UP
-  runner     String     @default("fake") // fake | claude
-  prompt     String
-  status     String     @default("QUEUED") // QUEUED | RUNNING | SUCCEEDED | FAILED | CANCELLED | INTERRUPTED
-  sessionId  String?
-  summary    String? // the agent's final message
-  error      String?
-  costUsd    Float?
-  numTurns   Int?
-  durationMs Int?
-  startedAt  DateTime?
-  endedAt    DateTime?
-  createdAt  DateTime   @default(now())
-  events     RunEvent[]
+  kind             String     @default("INITIAL") // INITIAL | FOLLOW_UP | FIX (failing checks back to Claude) | CHECKS (checks only)
+  fixRound         Int? // FIX: 1, 2…
+  runner           String     @default("fake") // fake | claude
+  prompt           String
+  status           String     @default("QUEUED") // QUEUED | RUNNING | SUCCEEDED | FAILED | CANCELLED | INTERRUPTED
+  sessionId        String?
+  summary          String? // the agent's final message
+  error            String?
+  // Claude usage of this run, from the Agent SDK result (resumed sessions: only this run's part).
+  costUsd          Float? // API-equivalent cost reported by Claude Code (covered by the subscription)
+  numTurns         Int?
+  model            String? // models used, most expensive first: "claude-sonnet-4-5, claude-haiku-4-5"
+  inputTokens      Int?
+  outputTokens     Int?
+  cacheReadTokens  Int?
+  cacheWriteTokens Int?
+  sessionUsageJson String? // the session's cumulative usage as reported, to compute the next resumed run's part
+  durationMs       Int? // wall clock: setup, Claude, checks and screenshots
+  checksStatus     String? // null (no checks) | RUNNING | PASSED | FAILED | STOPPED
+  checksMs         Int? // time spent running checks
+  startedAt        DateTime?
+  endedAt          DateTime?
+  createdAt        DateTime   @default(now())
+  events           RunEvent[]
+  checks           RunCheck[]
 
   @@index([status, createdAt])
   @@index([cardId, createdAt])
@@ -165,6 +183,25 @@ model RunEvent {
 
   @@unique([runId, seq])
   @@map("run_events")
+}
+
+// One check (a configured shell command) run after a run, in the card's folder.
+model RunCheck {
+  id         String    @id @default(cuid())
+  runId      String
+  run        Run       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  position   Int
+  name       String
+  command    String
+  status     String    @default("PENDING") // PENDING | RUNNING | PASSED | FAILED | TIMED_OUT | SKIPPED
+  exitCode   Int?
+  durationMs Int?
+  output     String? // the end of stdout and stderr
+  startedAt  DateTime?
+  endedAt    DateTime?
+
+  @@index([runId, position])
+  @@map("run_checks")
 }
 
 // ─── 4. Sync history ────────────────────────────────────────────────────────

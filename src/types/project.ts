@@ -1,3 +1,4 @@
+import type { CheckConfig } from '~/lib/checks';
 import type { ISODate } from './api';
 
 export type ProjectDto = {
@@ -31,6 +32,11 @@ export type ProjectDto = {
   previewEnabled: boolean;
   previewCommand: string | null;
   previewUrl: string | null;
+  /** Checks before review: the commands run in the card's folder after each run. */
+  checksEnabled: boolean;
+  checks: CheckConfig[];
+  checksAutoFix: boolean;
+  checksMaxFixRounds: number;
   lastSyncedAt: ISODate | null;
   /** Error of the latest sync, when it failed. */
   lastSyncError: string | null;

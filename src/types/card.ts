@@ -3,7 +3,9 @@ import type { ScopeKind, ScopeSize, ScopeStatus } from '~/lib/scope';
 import type { RiskArea, RiskLevel } from '~/lib/risk';
 import type { ISODate } from './api';
 import type { ProjectDto } from './project';
-import type { RunStatus } from './run';
+import type { RunKind, RunStatus } from './run';
+import type { CardChecksDto } from './checks';
+import type { UsageTotals } from '~/lib/usage';
 
 export type CardLabel = { id: string; name: string; color: string | null };
 
@@ -85,8 +87,12 @@ export type CardDto = {
   scope: CardScopeDto;
   risk: CardRiskDto | null;
   preview: CardPreviewDto;
+  /** The latest checks of the card's work (null: none ran). */
+  checks: CardChecksDto | null;
+  /** Time and Claude usage of every finished run (null: none yet). */
+  usage: UsageTotals | null;
   /** The queued or running run, if any. `queuePosition` is 1-based among queued runs. */
-  activeRun: { id: string; status: RunStatus; queuePosition: number | null } | null;
+  activeRun: { id: string; status: RunStatus; kind: RunKind; fixRound: number | null; queuePosition: number | null } | null;
   /** The latest run (active or finished). */
   lastRun: { id: string; status: RunStatus; error: string | null } | null;
   trelloLastActivity: ISODate;
