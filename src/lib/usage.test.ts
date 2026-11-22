@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   addUsage,
+  averageRunCost,
+  budgetStatus,
   clockDuration,
   csvCell,
   formatTokens,
@@ -145,5 +147,27 @@ describe('formatting', () => {
     expect(formatTokens(1_250_000)).toBe('1.25M');
     expect(csvCell('-1')).toBe("'-1");
     expect(csvCell(-1)).toBe('-1');
+  });
+});
+
+describe('averageRunCost', () => {
+  it('divides the cost by the number of runs across cards', () => {
+    expect(averageRunCost([{ runs: 3, costUsd: 1.5 }, { runs: 1, costUsd: 0.5 }])).toBe(0.5);
+  });
+
+  it('is 0 when nothing ran', () => {
+    expect(averageRunCost([])).toBe(0);
+    expect(averageRunCost([{ runs: 0, costUsd: 0 }])).toBe(0);
+  });
+});
+
+describe('budgetStatus', () => {
+  it('is ok under 80 % of the budget', () => {
+    expect(budgetStatus(10, 50)).toBe('ok');
+  });
+
+  it('is near from 80 % of the budget', () => {
+    expect(budgetStatus(40, 50)).toBe('near');
+    expect(budgetStatus(45, 50)).toBe('near');
   });
 });
