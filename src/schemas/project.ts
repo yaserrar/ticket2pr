@@ -83,5 +83,8 @@ export const projectParams = z.object({ projectId: idSchema });
 /** `GET /api/projects/{id}/usage?period=` (and its CSV). */
 export const usageQuery = z.object({ period: usagePeriodSchema.catch('month') });
 
+/** `DELETE /api/projects/{id}/usage?before=`: forget the runs that started before a date. */
+export const usageResetQuery = z.object({ before: z.coerce.date() });
+
 export const syncBody = z.object({ trigger: syncTriggerSchema.default('MANUAL') });
 export type SyncInput = z.input<typeof syncBody>;

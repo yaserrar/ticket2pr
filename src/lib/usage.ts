@@ -282,3 +282,19 @@ export function formatCost(usd: number) {
   if (usd > 0 && usd < 0.01) return '<$0.01';
   return `$${usd.toFixed(2)}`;
 }
+
+/** Mean API-equivalent cost of one run over the given cards. 0 when nothing ran. */
+export function averageRunCost(rows: Pick<UsageTotals, 'runs' | 'costUsd'>[]) {
+  const runs = rows.reduce((sum, r) => sum + r.runs, 0);
+  return runs === 0 ? 0 : rows.reduce((sum, r) => sum + r.costUsd, 0) / runs;
+}
+
+export type BudgetStatus = 'ok' | 'near' | 'over';
+
+/** Where a period's cost stands against a monthly budget: "near" from 80 %, "over" past it. */
+export function budgetStatus(spentUsd: number, budgetUsd: number): BudgetStatus {
+  const ratio = spentUsd / budgetUsd;
+  if (ratio >= 0.8) return 'near';
+  if (ratio >= 1) return 'over';
+  return 'ok';
+}

@@ -81,6 +81,14 @@ export const workUsageService = {
     };
   },
 
+  /** Deletes the finished runs that started before `before`, so the usage counts from that day. */
+  async resetBefore(projectId: string, before: Date) {
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
+    if (!project) throw notFound('Project');
+    const { count } = await prisma.run.deleteMany({ where: { ...finished, startedAt: { lt: before } } });
+    return { deleted: count };
+  },
+
   /** The per-card list of a period as CSV, and a file name for it. */
   async csv(projectId: string, period: UsagePeriod, now = new Date()) {
     const [usage, project] = await Promise.all([
@@ -88,8 +96,9 @@ export const workUsageService = {
       prisma.project.findUnique({ where: { id: projectId }, select: { name: true } }),
     ]);
     const label = (status: string) => STATUS_META[cardStatusSchema.catch('NEW').parse(status)].label;
-    const slug = (project?.name ?? 'project').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'project';
-    const span = usage.firstDay ? `${usage.firstDay}-to-${usage.lastDay ?? day(now)}` : 'all-time';
-    return { filename: `ticket2pr-usage-${slug}-${span}.csv`, body: usageCsv(usage.cards, label) };
+    // The client sees this name: keep the project's real name instead of a slug.
+    const name = project?.name ?? 'Project';
+    const span = usage.firstDay ? `${usage.firstDay} to ${usage.lastDay ?? day(now)}` : 'all time';
+    return { filename: `Ticket2PR usage - ${name} - ${span}.csv`, body: usageCsv(usage.cards, label) };
   },
 };
